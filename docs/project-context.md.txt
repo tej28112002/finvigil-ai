@@ -1,0 +1,84 @@
+# FinVigil AI — Project Context
+
+## ✅ Completed Phases
+
+PHASE 1 → Architecture ✅
+PHASE 2 → Database Schema + Migration ✅
+PHASE 2.5 → Supabase Deployment ✅
+PHASE 3.1 → Backend Setup (FastAPI + DB connection) ✅
+
+---
+
+## 🧪 Backend Status
+
+* FastAPI server running
+* Endpoint: `/api/v1/health`
+* Response:
+  {
+  "status": "ok",
+  "db": "connected"
+  }
+
+---
+
+## 🗄 Database
+
+* PostgreSQL via Supabase
+* Schema already applied (schema.sql)
+* Migration applied (RLS, indexes, constraints)
+* Using connection pooler (port 6543)
+
+---
+
+## 📁 Current Backend Structure
+
+backend/
+└── app/
+├── main.py
+├── core/config.py
+├── db/session.py
+├── api/v1/health.py
+└── models/ (empty)
+
+---
+
+## 🚧 Current Phase
+
+PHASE 3.2 → ORM Models (STARTING)
+
+---
+
+## 🧱 Architecture Rules
+
+* One model per file
+* Use SQLAlchemy ORM
+* Use DeclarativeBase
+* Use UUID primary keys
+* Use Timestamp mixin
+* No business logic in models
+* Clean modular structure
+
+---
+
+## 🎯 Goal (Current)
+
+Convert database schema → SQLAlchemy models
+
+---
+
+## ⚠️ Strict Rules
+
+* No skipping phases
+* No guessing schema
+* Follow step-by-step execution
+* Do NOT regenerate entire system
+* Extend existing code only
+
+---
+
+## 🔜 Next Steps
+
+1. Create base.py (Base + Mixins)
+2. Create first model (e.g., trades)
+3. Map relationships
+4. Build remaining models
