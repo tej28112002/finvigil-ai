@@ -28,3 +28,8 @@ class TaxSummaryResponse(BaseModel):
     calculated_at: datetime
     created_at: datetime
     updated_at: datetime
+    disclaimer: str = (
+        "Capital gains tax estimate only. Does NOT include 4% cess, "
+        "surcharge, or tax on salary, rental, or other income sources. "
+        "For your complete tax liability, consult your CA."
+    )

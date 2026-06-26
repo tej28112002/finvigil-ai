@@ -1,84 +1,509 @@
-# FinVigil AI — Project Context
+FinVigil AI — Project Context
 
-## ✅ Completed Phases
 
-PHASE 1 → Architecture ✅
-PHASE 2 → Database Schema + Migration ✅
-PHASE 2.5 → Supabase Deployment ✅
-PHASE 3.1 → Backend Setup (FastAPI + DB connection) ✅
+Purpose of this file: This is the single source of truth for the FinVigil AI backend. Paste it at the start of any new AI conversation or hand it to any new developer so they instantly understand the full architecture, every decision made, what is built, and what comes next. Keep it updated after every completed phase.
 
----
 
-## 🧪 Backend Status
 
-* FastAPI server running
-* Endpoint: `/api/v1/health`
-* Response:
-  {
-  "status": "ok",
-  "db": "connected"
-  }
+Last updated: Phase 4.7 (Zerodha Data Sync) — June 2026
 
----
 
-## 🗄 Database
+1. PRODUCT OVERVIEW
 
-* PostgreSQL via Supabase
-* Schema already applied (schema.sql)
-* Migration applied (RLS, indexes, constraints)
-* Using connection pooler (port 6543)
+FinVigil AI is an India-only portfolio intelligence SaaS. It consolidates holdings across multiple brokers, tracks cost basis via FIFO, computes capital-gains tax (STCG/LTCG), and helps users prepare for ITR filing. It is read-only — it never executes trades.
 
----
+The 5 Core Features (product promise)
 
-## 📁 Current Backend Structure
 
-backend/
-└── app/
-├── main.py
-├── core/config.py
-├── db/session.py
-├── api/v1/health.py
-└── models/ (empty)
+🏦 Multi-Broker Dashboard — consolidate Zerodha, Groww, Upstox, WazirX, CoinDCX into one wealth view (one total value, one P&L, one tax picture).
+🌾 Tax-Loss Harvesting — identify losing positions to sell before year-end to offset gains and reduce tax.
+🎬 Portfolio Replay — rewind the portfolio to any past date and watch it evolve trade by trade.
+🎲 Monte Carlo Simulation — run thousands of future scenarios for a probability range of portfolio value.
+🎙️ Voice Journal — record voice notes per trade, timestamped, linked to trades, searchable.
 
----
 
-## 🚧 Current Phase
+Supporting capabilities (infrastructure that powers the 5 features)
 
-PHASE 3.2 → ORM Models (STARTING)
+Broker OAuth sync, CSV import, FIFO cost basis, STCG/LTCG tax engine, CA-readable export, corporate action adjustments, F&O trade storage.
 
----
+Scope boundary (from BRD)
 
-## 🧱 Architecture Rules
+"Not a tax preparer/filer — exports + User/CA input fields only." FinVigil produces capital-gains figures and CA-assistance exports; the CA completes the actual ITR. Default Assessment Year: AY 2026-27 / FY 2025-26.
 
-* One model per file
-* Use SQLAlchemy ORM
-* Use DeclarativeBase
-* Use UUID primary keys
-* Use Timestamp mixin
-* No business logic in models
-* Clean modular structure
 
----
+2. TECH STACK
 
-## 🎯 Goal (Current)
 
-Convert database schema → SQLAlchemy models
+Backend: FastAPI + SQLAlchemy (Python 3.11)
+Database: PostgreSQL via Supabase (ap-south-1 Mumbai)
+Secrets: Supabase Vault (for per-user broker access tokens)
+Frontend: Next.js 15 (NOT built yet — Phase 13)
+Async/jobs: Celery + Redis (NOT built yet — Phase 12)
+Payments: Razorpay (later) · Email: Resend · SMS: Twilio
+Broker SDK: kiteconnect (Zerodha)
 
----
 
-## ⚠️ Strict Rules
+Local project root
 
-* No skipping phases
-* No guessing schema
-* Follow step-by-step execution
-* Do NOT regenerate entire system
-* Extend existing code only
+C:\Users\tejas\OneDrive\Desktop\finvigil-ai\backend
 
----
+Key runtime dependencies (in requirements.txt)
 
-## 🔜 Next Steps
+fastapi, uvicorn, sqlalchemy, psycopg2, python-dotenv, pydantic, python-multipart, pandas, openpyxl, kiteconnect
 
-1. Create base.py (Base + Mixins)
-2. Create first model (e.g., trades)
-3. Map relationships
-4. Build remaining models
+
+3. WORKFLOW (how this project is built)
+
+The user runs a separate coding agent called "Antigravity." The collaboration loop:
+
+
+The AI assistant writes a detailed, structured prompt.
+User pastes it into Antigravity.
+User pastes Antigravity's result back.
+The assistant verifies line-by-line against spec before the user saves.
+
+
+Important learned behaviors:
+
+
+Antigravity frequently deviates on small mechanical files (route paths, missing imports, missing closing parens, query-param vs path-param). For tiny changes (e.g. main.py router additions, one-line fixes), the assistant gives exact full-file content to paste directly instead of round-tripping.
+Every code change is verified against the spec before saving. The assistant traces math/logic by hand for anything financial.
+After each completed phase: provide a non-technical summary + technical summary + overall project status (standing user request).
+
+
+Testing pattern
+
+
+Two PowerShell terminals: one runs uvicorn app.main:app --reload, the other runs Invoke-WebRequest test commands.
+Always activate the venv first in any new terminal: .\venv\Scripts\activate (packages only exist inside the venv; forgetting this causes ModuleNotFoundError).
+Type Y on the PowerShell security warning. Use $r = Invoke-WebRequest ...; $r.Content to see full untruncated JSON.
+For file uploads, the Swagger UI at http://localhost:8000/docs is the easiest path (PowerShell multipart is fragile).
+
+
+Test constants
+
+
+Test user_id = 765984b3-fd6b-4091-8d24-6808d8680b3a
+Test broker_connection_id = b5ea19b2-3232-4eac-80af-107a6a5d67a4 (this is the Zerodha connection)
+RELIANCE instrument_id = 0e622c58-467d-40bc-9291-d9e11f3f9205
+
+
+
+4. ARCHITECTURE RULES (STRICT — never violate)
+
+
+Layering: Model (schema only) → Repository (DB access only) → Service (business logic only) → API (request/response only). Never mix layers.
+One model per file. UUID primary keys via UUIDMixin. Timestamps via TimestampMixin.
+Money math: always Decimal(str(value)), never float. Compare with Decimal("0"), not integer 0.
+Transaction atomicity: commit happens ONCE in get_db(). All repository writes use self.db.flush() — NEVER self.db.commit().
+Dependency injection: each API file has a get_*_service() function that builds repos → services.
+Idempotency: all trade-insertion paths use the single shared generate_trade_idempotency_hash() from app/core/idempotency.py.
+
+
+
+5. SOURCE OF TRUTH vs DERIVED DATA
+
+Source of truth (irreplaceable):
+
+
+trades — the raw record of what happened. The foundation everything derives from.
+broker_connections, instruments, corporate_action_adjustments — external facts.
+
+
+Derived (rebuildable from trades + corporate actions):
+
+
+holding_lots ← built from buys, consumed by sells (FIFO)
+realized_gains ← built from sells via FIFO
+tax_summaries ← computed from realized_gains (fully rebuildable; recomputed every call)
+dashboard_projections ← from holdings + live prices
+
+
+⚠️ KNOWN PRODUCTION RISK: There is currently NO "rebuild from trades" function. holding_lots and realized_gains are built incrementally and CANNOT be reconstructed if corrupted. A reconstruction engine should be built (planned as part of Phase 5.3, which has to replay trades anyway).
+
+
+6. COMPLETED PHASES (all verified end-to-end on real data)
+
+PhaseDescriptionStatus1Architecture Design✅2Database Schema✅2.5Supabase Deployment✅3.1Backend Foundation✅3.2ORM Models✅3.3Repository Layer✅3.4Service Layer Foundation✅3.5FIFO Engine✅4.1Broker Connection Endpoints✅4.2Trade Ingestion Endpoints✅4.3Holding Lot Endpoints✅4.4Dashboard Endpoints✅ (uses buy_price as placeholder; day_pnl/unrealized_pnl = 0 pending live feed)5.1Portfolio Reconstruction✅ (joinedload to avoid N+1)5.2STCG/LTCG Classification✅6.1Tax Engine Core✅6.2CA-Readable Tax Export✅6.3Corporate Action Adjustments✅4.6CSV Import (Equity + F&O)✅4.5Zerodha OAuth Connection✅4.7Zerodha Data Sync✅ (code complete & verified; live sync needs fresh daily token)
+
+Progress: 19 / 44 phases (~43%)
+
+
+7. PHASE DETAILS & KEY DECISIONS
+
+Phase 6.1 — Tax Engine Core
+
+
+tax_summaries table (16 cols + disclaimer field on response).
+get_assessment_year(sell_date): month ≥ 4 → FY starts that year; AY = FY+1. Verified: 2025-06-15 → AY 2026-27.
+Rates: STCG 20% (0.20), LTCG 12.5% (0.125), LTCG exemption ₹1,25,000.
+Endpoints: POST /tax/calculate, GET /tax/summary/, GET /tax/summary/{assessment_year} (route order matters — literal before parameterized).
+
+
+Phase 6.2 — CA-Readable Tax Export
+
+
+Extended ca_export_jobs with assessment_year VARCHAR(9) + export_type VARCHAR(50) (both nullable).
+POST /tax/export returns CapitalGainsExportResponse (summary + per-transaction detail + disclaimer).
+Computed on-demand (not stored); creates audit row with status='completed' (synchronous, no Celery).
+Export field names deliberately renamed for honesty: total_tax_liability → total_tax_estimate, etc.
+Design decision: extend existing ca_export_jobs (BRD alignment) rather than create a new table; Phase 11.1 will add s3_url/bundle fields to the same table.
+
+
+Phase 6.3 — Corporate Action Adjustments
+
+
+corporate_action_adjustments table (id, user_id, instrument_id, action_type, ratio, applied_at, timestamps).
+Handles stock_split and bonus_issue: open/partial lots bought before action date get quantity × ratio, buy_price ÷ ratio; investment preserved.
+Duplicate guard via get_duplicate(). POST /corporate-actions/apply, GET /corporate-actions/.
+Verified: 2:1 split on RELIANCE → 2 lots adjusted, 20→40 qty, 2750→1375 price.
+
+
+Phase 4.6 — CSV Import (Zerodha Tradebook)
+
+
+Two-layer design: csv_parser_service.py (pure file parsing, zero DB) + csv_import_service.py (orchestration).
+Zerodha tradebook format: header at row 14 (0-indexed), unnamed first/last columns dropped, ISIN nullable (null for F&O), supports .xlsx and .csv.
+Columns used: Trade ID→broker_trade_id, Symbol, ISIN, Trade Date, Segment (EQ/FO), Trade Type, Quantity, Price, Order Execution Time.
+POST /csv-import/tradebook (multipart upload). Returns CsvImportResponse (total_rows, imported, skipped, errors).
+Verified: 60 F&O trades imported, 0 skipped, 0 errors.
+
+
+Phase 4.5 — Zerodha OAuth Connection
+
+
+Credentials split: ZERODHA_API_KEY + ZERODHA_API_SECRET in .env (app-level); per-user access_token in Supabase Vault; Vault secret UUID in broker_connections.credentials_kms_id.
+Flow: GET /brokers/zerodha/login (creates connection + returns Kite login URL) → user logs in → Zerodha redirects with request_token → GET /brokers/zerodha/callback (exchanges via HMAC-SHA256 → access_token → Vault → marks active).
+vault_repository.py is the only file using raw SQL (Vault functions are Postgres functions, not ORM tables); all values parameterized.
+Vault API: vault.create_secret(secret, name, desc) → UUID; vault.update_secret(id, ...); read via SELECT decrypted_secret FROM vault.decrypted_secrets WHERE id = :id.
+Daily token expiry handled by manual re-login (no Celery yet); update_secret() refreshes the same Vault entry in place.
+Verified: OAuth callback → connected: true, status: active; Vault round-trip (store→retrieve→decrypt) confirmed.
+
+
+Phase 4.7 — Zerodha Data Sync
+
+
+Option A chosen: trades only (not holdings). Keeps trades as single source of truth; holdings stay derived via FIFO.
+Added to zerodha_service.py: _get_kite_client() (builds authenticated KiteConnect from Vault token) + sync_today_trades() (fetches kite.trades(), routes through the existing trade pipeline).
+kite.trades() fields: trade_id, tradingsymbol, transaction_type (BUY/SELL), quantity, average_price, fill_timestamp, exchange.
+Exchange → instrument_type mapping: NFO/BFO → fno, everything else → equity.
+Reuses the same generate_trade_idempotency_hash() → OAuth-synced and CSV-imported trades auto-deduplicate against each other.
+POST /brokers/zerodha/sync returns CsvImportResponse (reused).
+Code verified correct. Live sync currently returns "Incorrect api_key or access_token" because the daily token expired — this is expected; needs fresh login.
+
+
+
+8. F&O HANDLING (Option C — full isolation)
+
+Decision: F&O trades are stored as source-of-truth but completely isolated from the equity FIFO engine until Phase 5.3 builds a dedicated F&O engine.
+
+
+trade_service.py has process_fno_buy_trade() and process_fno_sell_trade() — both store the trade only, no holding lots, no realized_gains.
+Routing (in both CSV import and Zerodha sync): fno + buy → process_fno_buy_trade; fno + sell → process_fno_sell_trade; everything else → process_trade.
+Why: equity FIFO assumes 365-day STCG/LTCG, indefinite holding, capital-gains treatment. F&O expires worthless, is taxed as business income, has lot-size sizing, and same-strike-different-expiry issues. Running F&O through equity FIFO would corrupt realized_gains and create phantom holdings.
+Verified: 60 F&O trades stored, fno_holding_lots = 0 (isolation proven).
+Phase 5.3 will: build F&O P&L engine + reconstruct F&O positions from stored trades.
+
+
+
+9. CURRENT DATABASE SCHEMA (key tables)
+
+instruments
+
+id, isin (varchar, nullable, unique), symbol (varchar, not null), type (enum: equity/fno/mf/crypto), name (varchar nullable in DB; ORM treats not-null, uses symbol as fallback), timestamps.
+
+
+ORM note: Python attribute is instrument_type, mapped to DB column type via mapped_column("type", ...).
+
+
+broker_connections
+
+id, user_id (FK auth.users CASCADE), broker_name (enum: zerodha/groww/upstox/wazirx/coindcx/csv), status (enum: active/disconnected/syncing/error — NO pending), credentials_kms_id (varchar nullable — holds Vault secret UUID), timestamps. Unique on (user_id, broker_name).
+
+trades
+
+Source of truth. idempotency_hash UNIQUE constraint = sha256(broker_connection_id:broker_trade_id). Has instrument_id, broker_trade_id, trade_type, quantity, price, execution_time.
+
+holding_lots
+
+quantity_bought, quantity_remaining, buy_price, buy_date, status (open/partial/closed), source_trade_id, instrument_id.
+
+realized_gains
+
+sell_trade_id, holding_lot_id, quantity_sold, buy_price, sell_price, buy_date, sell_date, holding_days, gain_type (STCG/LTCG), profit_loss.
+
+tax_summaries
+
+16 columns: totals, taxable amounts, rates, exemption, taxes, total_tax_liability, calculated_at. (Response schema adds a disclaimer field.)
+
+corporate_action_adjustments
+
+user_id, instrument_id, action_type, ratio (numeric 18,8), applied_at, timestamps.
+
+ca_export_jobs
+
+id, user_id, status (enum, default pending), s3_url (nullable), assessment_year (varchar9 nullable), export_type (varchar50 nullable), timestamps.
+
+vault.secrets (Supabase Vault)
+
+Managed by Vault. Read decrypted via vault.decrypted_secrets view.
+
+
+10. CURRENT main.py ROUTERS (12 total, all prefix="/api/v1")
+
+health, broker, trade, holding, dashboard, portfolio, realized_gain, tax, tax_export, corporate_action, csv_import, zerodha
+
+
+11. BUG FIXES APPLIED (verified)
+
+Transaction Atomicity (Tier 1) — FIXED ✅
+
+
+Root cause: base.py create()/delete() committed per-call, breaking atomicity across multi-write operations (a sell = trade + lot update + realized_gain). Failed sells left orphan trades + locked idempotency_hash + silent tax understatement.
+Fix (4 files together): session.py get_db() now yield → commit(), except: rollback(); raise, finally: close(). base.py, dashboard_repository.py, tax_summary_repository.py all use flush() only.
+Proven by: oversell test (sell 9999 of 40 held) → 400 error AND zero orphan rows (rollback works).
+
+
+Tax Set-Off (Tier 2 Item 1) — FIXED ✅
+
+
+tax_engine_service.py Step 5: a net STCG loss now offsets LTCG gain (and vice versa) before the LTCG exemption. Hand-verified 4 cases; regression-tested existing data unchanged.
+
+
+Honest Labeling (Tier 2 Item 3) — FIXED ✅ (Option C)
+
+
+Added a disclaimer field (default text) to TaxSummaryResponse — no cess math, no schema migration. States it's a capital-gains estimate only, excludes cess/surcharge/other income.
+
+
+datetime.utcnow() deprecation — PARTIALLY FIXED
+
+
+Fixed in tax_summary_repository.py (→ datetime.now(timezone.utc)). Still present in tax_summary.py model default — flagged for cleanup.
+
+
+
+12. TECHNICAL DEBT / DEFERRED (flagged, not blocking)
+
+
+No reconstruction engine — can't rebuild holding_lots/realized_gains from trades. HIGH priority; build in Phase 5.3.
+Tier 2 Item 2: tax engine ignores instrument_type — crypto will get wrong equity rates once Phase 5.4 lands. realized_gains will need an income_type discriminator (equity capital gains vs F&O business income vs crypto VDA).
+instruments table for F&O: needs expiry_date, strike, option_type, lot_size (decide before Phase 5.3: extend table vs separate fno_contracts model). F&O contract bloat risk at scale.
+tax_summary.py model still has deprecated default=datetime.utcnow.
+No rounding on tax amounts (storing fractional paise). FIFO 365-day threshold hardcoded for all instrument types.
+get_assessment_year() duplicated in tax_engine_service.py and tax_export_service.py — refactor to shared util.
+IntegrityError (duplicate idempotency_hash) returns raw 500 not clean 400 (minor).
+No CORS middleware (will block frontend Phase 13).
+Per-instrument DB query loop in tax_export_service (flagged for bulk get_by_ids()).
+No pagination on any get_by_user() methods (needed before production).
+user_id is a query parameter with no auth (real auth is a later phase).
+Pre/post-23-July-2024 split tax rates not handled (fine for MVP AY 2026-27, all post-July).
+
+
+
+13. ZERODHA SETUP NOTES
+
+
+API key/secret belong to a friend's Kite Connect developer account; multiple users can auth through it, each getting their own daily-expiring access_token.
+API key: 6uamrld2mc32anjc. API secret was regenerated after an accidental exposure (the new value is private, in .env).
+.env contains ZERODHA_API_KEY and ZERODHA_API_SECRET. .gitignore created to protect .env.
+⚠️ OPEN ISSUE: Redirect URL in friend's Kite console is set to port :8008 but the server runs on :8000. Worked around by manually using :8000 in the callback command. Friend should fix it to: http://127.0.0.1:8000/api/v1/brokers/zerodha/callback (http not https, 127.0.0.1 not localhost, no trailing slash).
+Browser tip: when opening the login URL, paste it into the browser address bar (with https:// prefix), not Google search, or it gets searched instead of navigated.
+
+
+Kite API constraints (important)
+
+
+kite.holdings() = current snapshot only. kite.trades() = today's trades only (resets midnight).
+Historical trades are NOT available via API — only via CSV from Zerodha Console. This is why CSV import (Phase 4.6) is the authoritative/complete data source and OAuth sync (4.7) is the daily-freshness layer. The two reconcile via the shared idempotency hash.
+
+
+
+14. REVISED PHASE ORDER & WHAT'S NEXT
+
+Data ingestion backbone is complete: manual entry + CSV import + Zerodha OAuth + daily sync.
+
+Immediate next candidates
+
+
+Live Price Feed (upgrade Phase 4.4) — dashboard currently uses buy_price as placeholder; day_pnl/unrealized_pnl = 0. Needed to make the Multi-Broker Dashboard real even for Zerodha alone.
+Phase 5.3 — F&O P&L engine (business income; also builds the reconstruction engine from stored trades).
+Phase 5.4 — Crypto/VDA + TDS (flat 30%, no set-off; needs realized_gains income_type).
+
+
+Feature-completion status (the 5 core features)
+
+FeatureStatusProgress🏦 Multi-Broker Dashboard🟡 In Progress~40% (Zerodha done; Groww/Upstox/WazirX/CoinDCX pending; live prices pending; frontend pending)🌾 Tax-Loss Harvesting🔴 Not started0% (Phase 7)🎬 Portfolio Replay🔴 Not started0% (Phase 8)🎲 Monte Carlo Simulation🔴 Not started0% (Phase 8, needs Replay first)🎙️ Voice Journal🔴 Not started0% (Phase 9)
+
+Rationale for sequencing
+
+Never build tax engines against fake/manual data when real broker data is imminent. Build ingestion first (done), then live prices, then per-asset-class engines (F&O, crypto) against real data.
+
+
+15. STANDING USER PREFERENCES
+
+
+After each completed phase: give a non-technical summary + technical summary + overall project status.
+Verify every piece of returned code before saving (line-by-line against spec).
+For tiny mechanical files, provide exact full-file content to paste directly (skip Antigravity round-trip).
+Explain things in simple, non-technical terms when asked.
+Be honest about limitations, risks, and deferred work rather than over-claiming.
+
+Project contentFinVigilCreated by youAdd PDFs, documents, or other text to reference in this project.Contentfinvigil-ai-brd1.md.docxdocxtradebook-XL2993-FO.xlsxxlsx
+/
+Claude finished the response
+
+finvigil-ai-brd1.md.docx
+docx
+
+
+schema.sql
+262 lines
+
+sql
+
+
+project-context.md.txt
+85 lines
+
+txt
+
+You are joining an existing software project called FinVigil AI.
+DO NOT redesign the architecture. DO NOT assume missing requirements. DO NOT generatpastedschema.sql262 linessqlproject-context.md.txt85 linestxtfinvigil-ai-brd.md260 linesmd
+Verification
+Imports:
+uuid                                      ✅
+datetime                                  ✅
+Session                                   ✅
+TaxSummary model                          ✅
+BaseRepository                            ✅
+Class definition:
+extends BaseRepository[TaxSummary]     pastedfrom datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
+
+
+class TaxCalculationRequest(BaseModel):
+    assessment_year: str
+
+
+class TaxSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+   pastedThis audit is excellent and I want to be direct about it: this is correct, well-reasoned, and exactly the kind of thing that should be caught before Phase 6.2. Let me verify each claim against what we actually built, because before agreeing to a four-file fix touching working code, I need to confirmpastedsession.py14 linespybase.py27 linespydashboard_repository.py46 linespytax_summary_repository.py86 linespyFILE 1 of 4 — Replace This File Completely
+File path:
+app/db/session.py
+Open this file, delete everything inside it, paste this:
+pythonfrom sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.core.config import settings
+
+engine = create_engine(settings.DATABASE_URL, poolpasted08d8680b3a HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\tejas\AppData\Local\Programs\Python\Python311\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context   
+    self.dialect.do_executepastedGood — this whole exchange is exactly the right level of rigor, and the final decision (Option C, disclaimer-only, no cess math, no schema migration) is the correct one given your BRD's explicit scope. Let me run the test now.
+
+What's Being Tested
+Re-running the SAME calculation
+(AY 2025-26) we alrepastedI agree with the adjusted Path 1.
+Since ca_export_jobs already exists in the original schema, I prefer extending that table rather than creating a separate export tracking table. This avoids duplicate export architectures and keeps us aligned with the BRD.
+For Phase 6.2, let's add:
+
+assessment_ypastedfrom decimal import Decimal
+from datetime import datetime
+from uuid import UUID
+
+from app.models.ca_export_job import CaExportJob
+from app.repositories.tax_summary_repository import TaxSummaryRepository
+from app.repositories.realized_gain_repository import RealizedGainRepository
+from app.repopastedfrom decimal import Decimal
+from datetime import datetime
+from uuid import UUID
+
+from app.models.ca_export_job import CaExportJob
+from app.repositories.tax_summary_repository import TaxSummaryRepository
+from app.repositories.realized_gain_repository import RealizedGainRepository
+from app.repopastedholding_lot_repository.py85 linespyconfig.py12 linespytrade_service.py130 linespyfrom decimal import Decimal
+from datetime import datetime
+from uuid import UUID
+
+from app.models.trade import Trade
+from app.repositories.realized_gain_repository import RealizedGainRepository
+from app.repositories.trade_repository import TradeRepository
+from app.services.holding_service impopastedimport io
+from decimal import Decimal
+
+import pandas as pd
+
+
+class CsvParserService:
+    """
+    Pure file-parsing service for Zerodha tradebook files.
+    Zero DB access — takes raw bytes, validates structure,
+    returns a list of clean row dicts.
+    """
+
+    REQUIRED_COLUMNS = [
+  pastedinstrument_repository.py42 linespyinstrument.py49 linespyimport hashlib
+from decimal import Decimal
+from datetime import datetime
+from uuid import UUID
+
+from app.services.csv_parser_service import CsvParserService
+from app.services.trade_service import TradeService
+from app.repositories.instrument_repository import InstrumentRepository
+from app.scpastedtrade.py107 linespytrade_service.py187 linespyidempotency.py17 linespycsv_import_service.py153 linespyfrom decimal import Decimal
+from datetime import datetime
+from uuid import UUID
+
+from app.core.idempotency import generate_trade_idempotency_hash
+from app.services.csv_parser_service import CsvParserService
+from app.services.trade_service import TradeService
+from app.repositories.instrument_rpastedPS C:\Users\tejas\OneDrive\Desktop\finvigil-ai\backend> uvicorn app.main:app --reload
+INFO:     Will watch for changes in these directories: ['C:\\Users\\tejas\\OneDrive\\Desktop\\finvigil-ai\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started repastedCollecting kiteconnect
+  Downloading kiteconnect-5.2.0-py3-none-any.whl (25 kB)
+Collecting service_identity>=18.1.0
+  Downloading service_identity-26.1.0-py3-none-any.whl (11 kB)
+Collecting requests>=2.18.4
+  Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━pastedbroker_connection_repository.py52 linespyfrom uuid import UUID
+
+from kiteconnect import KiteConnect
+
+from app.core.config import settings
+from app.models.broker_connection import BrokerConnection
+from app.repositories.broker_connection_repository import (
+    BrokerConnectionRepository,
+)
+from app.repositories.vault_repository imppastedCTRL+C : The term 'CTRL+C' is not recognized as the name of a cmdlet, function, 
+script file, or operable program. Check the spelling of the name, or if a path    
+was included, verify that the path is correct and try again.
+At line:1 char:1
++ CTRL+C
++ ~~~~~~
+    + CategoryInfo          : ObjepastedINFO:     Will watch for changes in these directories: ['C:\\Users\\tejas\\OneDrive\\Desktop\\finvigil-ai\\backend']
+Form data requires "python-multipart" to be installed. 
+You can install "python-multipart" with:
+
+pip install python-multipart
+
+Traceback (most recent call last):
+  File "<frozpastedTraceback (most recent call last):
+  File "C:\Users\tejas\OneDrive\Desktop\finvigil-ai\backend\venv\Lib\site-packages\sqlalchemy\orm\clsregistry.py", line 516, in _resolve_name
+    rval = d[token]
+           ~^^^^^^^
+  File "C:\Users\tejas\OneDrive\Desktop\finvigil-ai\backend\venv\Lib\site-packapastedfrom datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+
+from kiteconnect import KiteConnect
+
+from app.core.config import settings
+from app.core.idempotency import generate_trade_idempotency_hash
+from app.models.broker_connection import BrokerConnection
+from app.repopasted(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.nonce='LqbbbPPLGyE4+pGqdL2phA==';d.innerHTML="window.__CF$cv$params={r:'a11a2befcdeb4010',t:'MTc4MjQ1NTUxMw=='};var a=document.createElement('script');a.nonce='LqbbbPPLGyE4+pGqdL2phA==';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();

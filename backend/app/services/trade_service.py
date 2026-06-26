@@ -116,6 +116,63 @@ class TradeService:
 
         return trade
 
+    def process_fno_sell_trade(
+        self,
+        user_id: UUID,
+        instrument_id: UUID,
+        broker_connection_id: UUID,
+        broker_trade_id: str,
+        quantity: Decimal,
+        price: Decimal,
+        execution_time: datetime,
+        idempotency_hash: str,
+    ) -> Trade:
+        # F&O sell trades are stored but NOT processed
+        # through FIFO or realized_gains.
+        # F&O P&L calculation is deferred to Phase 5.3
+        # which will build a dedicated F&O engine.
+        trade = self.trade_repository.create_trade(
+            user_id=user_id,
+            instrument_id=instrument_id,
+            broker_connection_id=broker_connection_id,
+            broker_trade_id=broker_trade_id,
+            trade_type="sell",
+            quantity=quantity,
+            price=price,
+            execution_time=execution_time,
+            idempotency_hash=idempotency_hash,
+        )
+        return trade
+
+    def process_fno_buy_trade(
+        self,
+        user_id: UUID,
+        instrument_id: UUID,
+        broker_connection_id: UUID,
+        broker_trade_id: str,
+        quantity: Decimal,
+        price: Decimal,
+        execution_time: datetime,
+        idempotency_hash: str,
+    ) -> Trade:
+        # F&O buy trades are stored but NOT processed into
+        # holding lots. Equity holding lots assume FIFO and
+        # STCG/LTCG rules that do not apply to F&O.
+        # F&O position reconstruction is deferred to Phase 5.3
+        # which will build a dedicated F&O engine from stored trades.
+        trade = self.trade_repository.create_trade(
+            user_id=user_id,
+            instrument_id=instrument_id,
+            broker_connection_id=broker_connection_id,
+            broker_trade_id=broker_trade_id,
+            trade_type="buy",
+            quantity=quantity,
+            price=price,
+            execution_time=execution_time,
+            idempotency_hash=idempotency_hash,
+        )
+        return trade
+
     def get_trades_by_user(
         self,
         user_id: UUID

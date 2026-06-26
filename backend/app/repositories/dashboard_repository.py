@@ -32,7 +32,7 @@ class DashboardRepository(BaseRepository[DashboardProjection]):
             existing.total_crypto_value = total_crypto_value
             existing.day_pnl = day_pnl
             existing.unrealized_pnl = unrealized_pnl
-            self.db.commit()
+            self.db.flush()
             self.db.refresh(existing)
             return existing
 

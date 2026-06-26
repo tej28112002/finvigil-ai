@@ -59,9 +59,23 @@ class TaxEngineService:
         ltcg_tax_rate = Decimal("0.125")
         ltcg_exemption = Decimal("125000")
 
-        # Step 5 — Calculate taxable amounts
-        taxable_stcg = max(Decimal("0"), total_stcg)
-        taxable_ltcg = max(Decimal("0"), total_ltcg - ltcg_exemption)
+        # STEP 5 — Net STCG/LTCG against each other (set-off),
+        # then apply LTCG exemption
+        if total_stcg < Decimal("0") and total_ltcg > Decimal("0"):
+            # STCG loss offsets LTCG gain
+            net_ltcg = total_ltcg + total_stcg
+            net_stcg = Decimal("0")
+        elif total_ltcg < Decimal("0") and total_stcg > Decimal("0"):
+            # LTCG loss offsets STCG gain
+            net_stcg = total_stcg + total_ltcg
+            net_ltcg = Decimal("0")
+        else:
+            # Same sign or one/both zero — no offsetting applicable
+            net_stcg = total_stcg
+            net_ltcg = total_ltcg
+
+        taxable_stcg = max(Decimal("0"), net_stcg)
+        taxable_ltcg = max(Decimal("0"), net_ltcg - ltcg_exemption)
 
         # Step 6 — Calculate tax amounts
         stcg_tax = taxable_stcg * stcg_tax_rate

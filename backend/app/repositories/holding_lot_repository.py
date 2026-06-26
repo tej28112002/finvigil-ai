@@ -25,6 +25,24 @@ class HoldingLotRepository(BaseRepository[HoldingLot]):
             .all()
         )
 
+    def get_open_lots_before_date(
+        self,
+        user_id: uuid.UUID,
+        instrument_id: uuid.UUID,
+        before_date: datetime,
+    ) -> list[HoldingLot]:
+        return (
+            self.db.query(HoldingLot)
+            .filter(
+                HoldingLot.user_id == user_id,
+                HoldingLot.instrument_id == instrument_id,
+                HoldingLot.status.in_(["open", "partial"]),
+                HoldingLot.buy_date < before_date,
+            )
+            .order_by(HoldingLot.buy_date.asc())
+            .all()
+        )
+
     def create_lot(
         self,
         user_id: uuid.UUID,
@@ -54,6 +72,19 @@ class HoldingLotRepository(BaseRepository[HoldingLot]):
     ) -> HoldingLot:
         lot.quantity_remaining = remaining_quantity
         lot.status = status
+        self.db.flush()
+        return lot
+
+    def apply_corporate_action_to_lot(
+        self,
+        lot: HoldingLot,
+        new_quantity_bought: float,
+        new_quantity_remaining: float,
+        new_buy_price: float,
+    ) -> HoldingLot:
+        lot.quantity_bought = new_quantity_bought
+        lot.quantity_remaining = new_quantity_remaining
+        lot.buy_price = new_buy_price
         self.db.flush()
         return lot
 

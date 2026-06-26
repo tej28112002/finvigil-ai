@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -64,8 +64,8 @@ class TaxSummaryRepository(BaseRepository[TaxSummary]):
             existing.stcg_tax = stcg_tax
             existing.ltcg_tax = ltcg_tax
             existing.total_tax_liability = total_tax_liability
-            existing.calculated_at = datetime.utcnow()
-            self.db.commit()
+            existing.calculated_at = datetime.now(timezone.utc)
+            self.db.flush()
             self.db.refresh(existing)
             return existing
 

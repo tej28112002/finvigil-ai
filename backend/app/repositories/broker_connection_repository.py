@@ -49,3 +49,12 @@ class BrokerConnectionRepository(BaseRepository[BrokerConnection]):
         connection.status = status
         self.db.flush()
         return connection
+
+    def update_credentials_kms_id(
+        self,
+        connection: BrokerConnection,
+        credentials_kms_id: str,
+    ) -> BrokerConnection:
+        connection.credentials_kms_id = credentials_kms_id
+        self.db.flush()
+        return connection

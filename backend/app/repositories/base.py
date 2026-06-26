@@ -17,10 +17,10 @@ class BaseRepository(Generic[T]):
     def create(self, **kwargs) -> T:
         instance = self.model(**kwargs)
         self.db.add(instance)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(instance)
         return instance
 
     def delete(self, instance: T) -> None:
         self.db.delete(instance)
-        self.db.commit()
+        self.db.flush()
