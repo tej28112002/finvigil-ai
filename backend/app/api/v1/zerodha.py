@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user_id
 from app.db.session import get_db
 from app.repositories.broker_connection_repository import (
     BrokerConnectionRepository,
@@ -56,7 +57,7 @@ def get_zerodha_service(
     response_model=ZerodhaLoginResponse
 )
 def get_zerodha_login_url(
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     service: ZerodhaService = Depends(get_zerodha_service)
 ):
     try:
@@ -72,6 +73,11 @@ def get_zerodha_login_url(
 )
 def zerodha_callback(
     request_token: str,
+    # Deliberately NOT auth-gated: this endpoint is hit by a raw browser
+    # redirect FROM Zerodha, which cannot carry an Authorization header.
+    # user_id stays a query param here — a documented exception to the
+    # Phase 11.2 auth rollout. Proper fix (a signed 'state' param round-
+    # tripped through the OAuth flow) is flagged as tech debt, not built.
     user_id: UUID,
     service: ZerodhaService = Depends(get_zerodha_service)
 ):
@@ -96,9 +102,9 @@ def zerodha_callback(
     response_model=CsvImportResponse
 )
 def sync_zerodha_trades(
-    user_id: UUID,
     broker_connection_id: UUID,
-    service: ZerodhaService = Depends(get_zerodha_service)
+    service: ZerodhaService = Depends(get_zerodha_service),
+    user_id: UUID = Depends(get_current_user_id),
 ):
     try:
         return service.sync_today_trades(

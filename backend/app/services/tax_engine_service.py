@@ -1,7 +1,7 @@
 from decimal import Decimal
-from datetime import datetime
 from uuid import UUID
 
+from app.core.tax_utils import get_assessment_year
 from app.models.tax_summary import TaxSummary
 from app.repositories.tax_summary_repository import TaxSummaryRepository
 from app.repositories.realized_gain_repository import RealizedGainRepository
@@ -16,31 +16,23 @@ class TaxEngineService:
         self.tax_summary_repository = tax_summary_repository
         self.realized_gain_repository = realized_gain_repository
 
-    def get_assessment_year(self, sell_date: datetime) -> str:
-        if sell_date.month >= 4:
-            fy_start_year = sell_date.year
-        else:
-            fy_start_year = sell_date.year - 1
-
-        ay_start_year = fy_start_year + 1
-        ay_end_year = ay_start_year + 1
-
-        return f"{ay_start_year}-{str(ay_end_year)[2:]}"
-
     def calculate_tax_summary(
         self,
         user_id: UUID,
         assessment_year: str,
     ) -> TaxSummary:
-        # Step 1 — Fetch all realized gains for user
-        all_gains = self.realized_gain_repository.get_by_user(
-            user_id=user_id
+        # Step 1 — Fetch EQUITY realized gains only. Crypto VDA gains
+        # (income_type='crypto_vda') are taxed by the crypto engine at a flat
+        # 30% with no set-off and must never enter the STCG/LTCG computation.
+        all_gains = self.realized_gain_repository.get_by_user_and_income_type(
+            user_id=user_id,
+            income_type="equity_capital_gains",
         )
 
         # Step 2 — Filter gains belonging to this assessment_year
         filtered_gains = [
             gain for gain in all_gains
-            if self.get_assessment_year(gain.sell_date) == assessment_year
+            if get_assessment_year(gain.sell_date) == assessment_year
         ]
 
         # Step 3 — Sum by gain_type using Decimal

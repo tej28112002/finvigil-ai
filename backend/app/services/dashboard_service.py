@@ -4,57 +4,58 @@ from uuid import UUID
 from app.models.dashboard_projection import DashboardProjection
 from app.repositories.dashboard_repository import DashboardRepository
 from app.repositories.holding_lot_repository import HoldingLotRepository
+from app.services.price_service import PriceService
 
 
 class DashboardService:
     def __init__(
         self,
         dashboard_repository: DashboardRepository,
-        holding_repository: HoldingLotRepository
+        holding_repository: HoldingLotRepository,
+        price_service: PriceService,
     ):
         self.dashboard_repository = dashboard_repository
         self.holding_repository = holding_repository
+        self.price_service = price_service
 
     def calculate_and_update_projection(
         self,
         user_id: UUID
     ) -> DashboardProjection:
-        all_lots = self.holding_repository.get_by_user(
+        active_lots = self.holding_repository.get_active_lots_by_user(
             user_id=user_id
         )
 
-        active_lots = [
-            lot for lot in all_lots
-            if lot.status in ["open", "partial"]
-        ]
-
         total_equity_value = Decimal("0")
         total_crypto_value = Decimal("0")
+        day_pnl = Decimal("0")
+        unrealized_pnl = Decimal("0")
 
-        for lot in active_lots:
-            # TODO: Replace lot.buy_price with
-            # live market price when broker
-            # price feed is connected (Phase 4.6+)
-            current_price = Decimal(str(lot.buy_price))
-            value = (
-                Decimal(str(lot.quantity_remaining))
-                * current_price
+        if active_lots:
+            symbols = list({lot.instrument.symbol for lot in active_lots})
+            price_data = self.price_service.get_prices(
+                user_id=user_id,
+                symbols=symbols,
             )
 
-            # TODO: Once Instrument relationship
-            # is loaded, split by
-            # instrument.instrument_type ==
-            # "crypto" vs others (Phase 5+)
-            total_equity_value += value
+            for lot in active_lots:
+                symbol = lot.instrument.symbol
+                quote = price_data.get(symbol, {})
 
-        day_pnl = Decimal("0")
-        # TODO: Calculate from live price -
-        # previous close price (Phase 4.6+)
+                last_price = quote.get("last_price") or Decimal(str(lot.buy_price))
+                prev_close = quote.get("prev_close") or last_price
 
-        unrealized_pnl = Decimal("0")
-        # TODO: Calculate from
-        # (live_price - buy_price) * quantity_remaining
-        # (Phase 4.6+)
+                quantity = Decimal(str(lot.quantity_remaining))
+                buy_price = Decimal(str(lot.buy_price))
+
+                value = quantity * last_price
+                day_pnl += (last_price - prev_close) * quantity
+                unrealized_pnl += (last_price - buy_price) * quantity
+
+                if lot.instrument.instrument_type == "crypto":
+                    total_crypto_value += value
+                else:
+                    total_equity_value += value
 
         return self.dashboard_repository.upsert_projection(
             user_id=user_id,

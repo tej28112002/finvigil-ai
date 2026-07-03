@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user_id
 from app.db.session import get_db
 from app.repositories.holding_lot_repository import HoldingLotRepository
 from app.schemas.holding import HoldingLotResponse
@@ -25,7 +26,7 @@ def get_holding_service(
     response_model=list[HoldingLotResponse]
 )
 def list_holdings(
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     service: HoldingLotService = Depends(get_holding_service)
 ):
     return service.get_lots_by_user(user_id=user_id)
@@ -37,6 +38,10 @@ def list_holdings(
 )
 def get_holding(
     lot_id: UUID,
+    # NOTE: requires a valid token but does not yet verify the lot belongs
+    # to this user — see project-context.md.txt Section 16 for the disclosed
+    # ownership-check gap on this endpoint.
+    user_id: UUID = Depends(get_current_user_id),
     service: HoldingLotService = Depends(get_holding_service)
 ):
     lot = service.get_lot_by_id(lot_id=lot_id)

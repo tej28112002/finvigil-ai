@@ -1,7 +1,7 @@
 from decimal import Decimal
-from datetime import datetime
 from uuid import UUID
 
+from app.core.tax_utils import get_assessment_year
 from app.models.ca_export_job import CaExportJob
 from app.repositories.tax_summary_repository import TaxSummaryRepository
 from app.repositories.realized_gain_repository import RealizedGainRepository
@@ -27,19 +27,6 @@ class TaxExportService:
         self.ca_export_job_repository = ca_export_job_repository
         self.instrument_repository = instrument_repository
 
-    def get_assessment_year(self, sell_date: datetime) -> str:
-        # TODO: This duplicates get_assessment_year() from TaxEngineService.
-        # Refactor into a shared utility function in a future cleanup phase.
-        if sell_date.month >= 4:
-            fy_start_year = sell_date.year
-        else:
-            fy_start_year = sell_date.year - 1
-
-        ay_start_year = fy_start_year + 1
-        ay_end_year = ay_start_year + 1
-
-        return f"{ay_start_year}-{str(ay_end_year)[2:]}"
-
     def generate_export(
         self,
         user_id: UUID,
@@ -55,12 +42,15 @@ class TaxExportService:
                 f"Call POST /tax/calculate first to generate one."
             )
 
-        all_gains = self.realized_gain_repository.get_by_user(
+        # EQUITY only — crypto VDA gains have their own export/engine and must
+        # not appear in the capital-gains export.
+        all_gains = self.realized_gain_repository.get_by_user_and_income_type(
             user_id=user_id,
+            income_type="equity_capital_gains",
         )
         filtered_gains = [
             gain for gain in all_gains
-            if self.get_assessment_year(gain.sell_date) == assessment_year
+            if get_assessment_year(gain.sell_date) == assessment_year
         ]
 
         unique_instrument_ids = list({gain.instrument_id for gain in filtered_gains})

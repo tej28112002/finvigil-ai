@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user_id
 from app.db.session import get_db
 from app.repositories.corporate_action_repository import CorporateActionRepository
 from app.repositories.holding_lot_repository import HoldingLotRepository
@@ -31,7 +32,7 @@ def get_corporate_action_service(
 )
 def apply_corporate_action(
     request: CorporateActionRequest,
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     service: CorporateActionService = Depends(
         get_corporate_action_service
     )
@@ -53,7 +54,7 @@ def apply_corporate_action(
     response_model=list[CorporateActionResponse]
 )
 def list_corporate_actions(
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     service: CorporateActionService = Depends(
         get_corporate_action_service
     )

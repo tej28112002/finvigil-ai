@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user_id
 from app.db.session import get_db
 from app.repositories.broker_connection_repository import BrokerConnectionRepository
 from app.services.broker_service import BrokerService
@@ -24,7 +25,7 @@ def get_broker_service(
 )
 def connect_broker(
     request: BrokerConnectRequest,
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     service: BrokerService = Depends(get_broker_service)
 ):
     try:
@@ -42,7 +43,7 @@ def connect_broker(
     response_model=list[BrokerConnectionResponse]
 )
 def list_brokers(
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     service: BrokerService = Depends(get_broker_service)
 ):
     return service.get_connections(user_id=user_id)
@@ -54,7 +55,7 @@ def list_brokers(
 )
 def disconnect_broker(
     connection_id: UUID,
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     service: BrokerService = Depends(get_broker_service)
 ):
     try:

@@ -1,11 +1,23 @@
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from app.models.trade import Trade
 from app.repositories.realized_gain_repository import RealizedGainRepository
 from app.repositories.trade_repository import TradeRepository
 from app.services.holding_service import HoldingLotService
+
+
+def _to_utc(dt: datetime) -> datetime:
+    """
+    Normalize a naive datetime to UTC. The DB stores TIMESTAMPTZ, so a
+    holding_lot's buy_date read back is always tz-aware; a naive
+    execution_time here would fail to subtract during FIFO (see
+    holding_service.consume_lots_fifo). Same fix as crypto_service.py.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 class TradeService:
@@ -43,6 +55,8 @@ class TradeService:
         execution_time: datetime,
         idempotency_hash: str
     ) -> Trade:
+        execution_time = _to_utc(execution_time)
+
         trade = self.trade_repository.create_trade(
             user_id=user_id,
             instrument_id=instrument_id,
@@ -78,6 +92,8 @@ class TradeService:
         execution_time: datetime,
         idempotency_hash: str
     ) -> Trade:
+        execution_time = _to_utc(execution_time)
+
         trade = self.trade_repository.create_trade(
             user_id=user_id,
             instrument_id=instrument_id,

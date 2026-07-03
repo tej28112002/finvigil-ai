@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user_id
 from app.db.session import get_db
 from app.repositories.tax_summary_repository import TaxSummaryRepository
 from app.repositories.realized_gain_repository import RealizedGainRepository
@@ -31,7 +32,7 @@ def get_tax_export_service(
 )
 def export_capital_gains(
     request: TaxExportRequest,
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     service: TaxExportService = Depends(get_tax_export_service)
 ):
     try:

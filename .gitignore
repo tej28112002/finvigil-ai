@@ -18,6 +18,11 @@ lib/
 lib64/
 parts/
 sdist/
+
+# The Python "lib/" rule above unintentionally matches frontend/lib/ (real
+# Next.js source, e.g. the Supabase client wrapper) - explicitly un-ignore it.
+!frontend/lib/
+!frontend/lib/**
 var/
 wheels/
 share/python-wheels/

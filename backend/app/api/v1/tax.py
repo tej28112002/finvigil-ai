@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user_id
 from app.db.session import get_db
 from app.repositories.realized_gain_repository import RealizedGainRepository
 from app.repositories.tax_summary_repository import TaxSummaryRepository
@@ -29,7 +30,7 @@ def get_tax_engine_service(
 )
 def calculate_tax(
     request: TaxCalculationRequest,
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     service: TaxEngineService = Depends(get_tax_engine_service)
 ):
     return service.calculate_tax_summary(
@@ -43,7 +44,7 @@ def calculate_tax(
     response_model=list[TaxSummaryResponse]
 )
 def list_tax_summaries(
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     service: TaxEngineService = Depends(get_tax_engine_service)
 ):
     return service.get_all_tax_summaries(user_id=user_id)
@@ -55,7 +56,7 @@ def list_tax_summaries(
 )
 def get_tax_summary(
     assessment_year: str,
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     service: TaxEngineService = Depends(get_tax_engine_service)
 ):
     summary = service.get_tax_summary(

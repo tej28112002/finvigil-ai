@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user_id
 from app.db.session import get_db
 from app.repositories.holding_lot_repository import HoldingLotRepository
 from app.repositories.instrument_repository import InstrumentRepository
@@ -48,7 +49,7 @@ def get_instrument_service(
 )
 def ingest_trade(
     request: TradeIngestRequest,
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     trade_service: TradeService = Depends(get_trade_service),
     instrument_service: InstrumentService = Depends(get_instrument_service)
 ):
@@ -83,7 +84,7 @@ def ingest_trade(
     response_model=list[TradeResponse]
 )
 def list_trades(
-    user_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
     trade_service: TradeService = Depends(get_trade_service)
 ):
     return trade_service.get_trades_by_user(user_id=user_id)
@@ -95,7 +96,11 @@ def list_trades(
 )
 def get_trade(
     trade_id: UUID,
-    trade_service: TradeService = Depends(get_trade_service)
+    trade_service: TradeService = Depends(get_trade_service),
+    # NOTE: requires a valid token but does not yet verify the trade belongs
+    # to this user — see project-context.md.txt Section 16 for the disclosed
+    # ownership-check gap on this endpoint.
+    user_id: UUID = Depends(get_current_user_id),
 ):
     trade = trade_service.get_trade_by_id(trade_id)
     if not trade:

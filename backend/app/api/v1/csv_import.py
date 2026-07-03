@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user_id
 from app.db.session import get_db
 from app.repositories.trade_repository import TradeRepository
 from app.repositories.holding_lot_repository import HoldingLotRepository
@@ -41,10 +42,10 @@ def get_csv_import_service(
     response_model=CsvImportResponse
 )
 async def import_tradebook(
-    user_id: UUID,
     broker_connection_id: UUID,
     file: UploadFile = File(...),
-    service: CsvImportService = Depends(get_csv_import_service)
+    service: CsvImportService = Depends(get_csv_import_service),
+    user_id: UUID = Depends(get_current_user_id),
 ):
     try:
         file_content = await file.read()

@@ -61,13 +61,28 @@ class RealizedGain(UUIDMixin, TimestampMixin, Base):
         nullable=False,
     )
 
-    gain_type: Mapped[str] = mapped_column(
+    # Nullable: equity rows are STCG/LTCG; crypto VDA rows are NULL
+    # (VDA has no holding-period classification).
+    gain_type: Mapped[str | None] = mapped_column(
         ENUM(
             "STCG", "LTCG",
             name="capital_gain_type_enum",
             create_type=False,
         ),
+        nullable=True,
+        index=True,
+    )
+
+    # Discriminator so equity capital gains and crypto VDA income can share
+    # this table but be taxed by different engines.
+    income_type: Mapped[str] = mapped_column(
+        ENUM(
+            "equity_capital_gains", "fno_business_income", "crypto_vda",
+            name="income_type_enum",
+            create_type=False,
+        ),
         nullable=False,
+        server_default="equity_capital_gains",
         index=True,
     )
 

@@ -113,3 +113,45 @@ class HoldingLotRepository(BaseRepository[HoldingLot]):
             .order_by(HoldingLot.buy_date.asc())
             .all()
         )
+
+    def delete_by_user(self, user_id: uuid.UUID) -> int:
+        """
+        Delete all holding lots for a user. Uses flush() — the single commit
+        happens in get_db(). Realized gains must be deleted first (FK RESTRICT).
+        """
+        deleted = (
+            self.db.query(HoldingLot)
+            .filter(HoldingLot.user_id == user_id)
+            .delete(synchronize_session=False)
+        )
+        self.db.flush()
+        return deleted
+
+    def delete_by_user_and_instrument_type(
+        self,
+        user_id: uuid.UUID,
+        instrument_type: str,
+    ) -> int:
+        """
+        Delete holding lots for a user scoped to one instrument_type (via a
+        subquery on instruments.type). Used by the equity reconstruction engine
+        so it only wipes equity lots and leaves crypto lots intact. Uses
+        flush(). Matching realized_gains must be deleted first (FK RESTRICT).
+        """
+        from app.models.instrument import Instrument
+
+        instrument_ids = (
+            self.db.query(Instrument.id)
+            .filter(Instrument.instrument_type == instrument_type)
+            .subquery()
+        )
+        deleted = (
+            self.db.query(HoldingLot)
+            .filter(
+                HoldingLot.user_id == user_id,
+                HoldingLot.instrument_id.in_(instrument_ids),
+            )
+            .delete(synchronize_session=False)
+        )
+        self.db.flush()
+        return deleted

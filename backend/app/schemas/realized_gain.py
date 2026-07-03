@@ -19,7 +19,8 @@ class RealizedGainResponse(BaseModel):
     buy_date: datetime
     sell_date: datetime
     holding_days: int
-    gain_type: str
+    gain_type: str | None
+    income_type: str
     profit_loss: Decimal
     created_at: datetime
     updated_at: datetime

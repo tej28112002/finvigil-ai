@@ -23,8 +23,9 @@ class RealizedGainRepository(BaseRepository[RealizedGain]):
         buy_date: datetime,
         sell_date: datetime,
         holding_days: int,
-        gain_type: str,
+        gain_type: str | None,
         profit_loss: float,
+        income_type: str = "equity_capital_gains",
     ) -> RealizedGain:
         return self.create(
             user_id=user_id,
@@ -39,6 +40,7 @@ class RealizedGainRepository(BaseRepository[RealizedGain]):
             holding_days=holding_days,
             gain_type=gain_type,
             profit_loss=profit_loss,
+            income_type=income_type,
         )
 
     def get_by_user(
@@ -77,3 +79,53 @@ class RealizedGainRepository(BaseRepository[RealizedGain]):
             .order_by(RealizedGain.buy_date.asc())
             .all()
         )
+
+    def get_by_user_and_income_type(
+        self,
+        user_id: uuid.UUID,
+        income_type: str,
+    ) -> list[RealizedGain]:
+        return (
+            self.db.query(RealizedGain)
+            .filter(
+                RealizedGain.user_id == user_id,
+                RealizedGain.income_type == income_type,
+            )
+            .order_by(RealizedGain.sell_date.desc())
+            .all()
+        )
+
+    def delete_by_user(self, user_id: uuid.UUID) -> int:
+        """
+        Delete ALL realized gains for a user (every income_type). Uses flush()
+        — the single commit happens in get_db().
+        """
+        deleted = (
+            self.db.query(RealizedGain)
+            .filter(RealizedGain.user_id == user_id)
+            .delete(synchronize_session=False)
+        )
+        self.db.flush()
+        return deleted
+
+    def delete_by_user_and_income_type(
+        self,
+        user_id: uuid.UUID,
+        income_type: str,
+    ) -> int:
+        """
+        Delete realized gains for a user scoped to one income_type. Used by the
+        equity reconstruction engine so it only wipes equity_capital_gains rows
+        and leaves crypto_vda rows intact. Must run BEFORE deleting the matching
+        holding_lots (FK RESTRICT). Uses flush().
+        """
+        deleted = (
+            self.db.query(RealizedGain)
+            .filter(
+                RealizedGain.user_id == user_id,
+                RealizedGain.income_type == income_type,
+            )
+            .delete(synchronize_session=False)
+        )
+        self.db.flush()
+        return deleted
