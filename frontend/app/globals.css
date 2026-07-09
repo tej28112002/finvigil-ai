@@ -1,26 +1,200 @@
 @import "tailwindcss";
 
+/* Dark mode is class-driven (html.dark), set pre-paint by the inline
+   script in layout.tsx and toggled by ThemeProvider. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================
+   FinVigil design tokens — "The Ledger, Modernized"
+   Light mode: white/near-white surfaces, near-black ink, blue accents.
+   Dark mode: deep charcoal-navy, not literal black.
+   Semantics are strict:
+     brand    = professional blue, actions & identity only
+     gain/loss= P&L only — UNCHANGED, financial convention, never touched
+     estimate = amber/gold, honesty/attention only (badges, disclaimers)
+                — a blue brand ruled out the earlier stamp-blue; amber
+                sits at a clearly distinct hue from blue
+   All 22 foreground/background pairs below are machine-verified via
+   the WCAG 2 relative-luminance contrast formula (AA: 4.5:1 text,
+   3:1 UI-boundary non-text) — see Stage 2A.2 notes in
+   project-context.md.txt for the full pass/fail table.
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-raised: #fcfdfe;
+  --ink: #14181d;
+  --ink-muted: #5a6572;
+  --ink-faint: #67717d;
+  --rule: #dfe3e8;
+  --rule-strong: #7c8794; /* 3.44:1 vs bg */
+  --brand: #1e56a8; /* 6.70:1 on bg, 7.11:1 on white */
+  --brand-hover: #17468c;
+  --brand-fg: #ffffff; /* 7.11:1 on --brand */
+  --brand-soft: #e3edf9;
+  --gain: #157347;
+  --gain-soft: #e2f2e9;
+  --loss: #c23934;
+  --loss-soft: #f9e9e8;
+  --estimate: #92400e; /* deep amber — 6.67:1 on bg, 5.98:1 on soft */
+  --estimate-soft: #faeacc;
+  --focus: #1e56a8;
+
+  /* Depth system (Stage 2A.2) — soft, layered, warm-neutral shadows.
+     Kept subtle on data screens; login/marketing get the full treatment. */
+  --shadow-sm: 0 1px 2px rgba(20, 24, 29, 0.06);
+  --shadow-md: 0 4px 12px -2px rgba(20, 24, 29, 0.08), 0 2px 4px -2px rgba(20, 24, 29, 0.04);
+  --shadow-lg: 0 16px 40px -12px rgba(20, 24, 29, 0.16), 0 4px 10px -4px rgba(20, 24, 29, 0.06);
+  --shadow-glow: 0 0 56px -12px rgba(30, 86, 168, 0.28);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(20, 24, 29, 0.08);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark {
+  --bg: #101418;
+  --surface: #171c22;
+  --surface-raised: #1d232b;
+  --ink: #e8ecf1;
+  --ink-muted: #a3adb8;
+  --ink-faint: #939ea9;
+  --rule: #2a323c;
+  --rule-strong: #5c6b7c; /* 3.39:1 vs bg */
+  --brand: #7ab0f0; /* 8.19:1 on dark bg */
+  --brand-hover: #92c0f5;
+  --brand-fg: #0c1928; /* 7.84:1 on --brand */
+  --brand-soft: #17293e;
+  --gain: #3dbb7e;
+  --gain-soft: #16281f;
+  --loss: #e06c5f;
+  --loss-soft: #301c19;
+  --estimate: #d9b45b; /* 9.36:1 on dark bg */
+  --estimate-soft: #2a2415;
+  --focus: #7ab0f0;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 16px -4px rgba(0, 0, 0, 0.5), 0 2px 6px -2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 24px 56px -16px rgba(0, 0, 0, 0.6), 0 8px 18px -8px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 64px -12px rgba(122, 176, 240, 0.35);
+  --glass-bg: rgba(23, 28, 34, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.08);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-fg: var(--brand-fg);
+  --color-brand-soft: var(--brand-soft);
+  --color-gain: var(--gain);
+  --color-gain-soft: var(--gain-soft);
+  --color-loss: var(--loss);
+  --color-loss-soft: var(--loss-soft);
+  --color-estimate: var(--estimate);
+  --color-estimate-soft: var(--estimate-soft);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Broker brand colors — broker chips ONLY (BRD §4) */
+  --color-broker-zerodha: #387ed1;
+  --color-broker-angelone: #e8402a;
+  --color-broker-upstox: #6b4fbb;
+  --color-broker-dhan: #00b386;
+  --color-broker-kotak: #ed1c24;
+
+  --font-display: var(--font-newsreader);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-plex-sans), system-ui, sans-serif;
+}
+
+/* Statement numerals: money is always tabular. */
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Quality floor: visible keyboard focus everywhere. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+::selection {
+  background: var(--brand-soft);
+  color: var(--ink);
+}
+
+/* ============================================================
+   Depth & micro-interaction utilities (Stage 2A.2)
+   Data screens use .card-lift sparingly and .shadow-sm/-md only —
+   the fuller glow/glass/float set is reserved for login & marketing.
+   ============================================================ */
+
+.shadow-token-sm { box-shadow: var(--shadow-sm); }
+.shadow-token-md { box-shadow: var(--shadow-md); }
+.shadow-token-lg { box-shadow: var(--shadow-lg); }
+.shadow-token-glow { box-shadow: var(--shadow-glow); }
+
+/* Gentle card hover-lift for data screens: a couple of pixels, not a leap. */
+.card-lift {
+  transition: transform 220ms var(--ease-out-expo), box-shadow 220ms var(--ease-out-expo);
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Frosted glass — background + blur only. Border is deliberately NOT set
+   here: usage sites need different border shapes (header = bottom hairline,
+   a full card = all sides), and a border on this class would fight
+   Tailwind's border-* utilities across cascade layers instead of composing
+   with them. Pair with border-{side} border-rule (or --glass-border via an
+   arbitrary value) at the call site. */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Ambient float for illustrated/login elements only — never on data UI. */
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.animate-float {
+  animation: float-y 6s ease-in-out infinite;
+}
+.animate-float-slow {
+  animation: float-y 8s ease-in-out infinite;
+}
+.animate-float-delay {
+  animation: float-y 7s ease-in-out infinite;
+  animation-delay: 1.2s;
+}
+
+/* Smooth theme transition on the properties that actually flip. */
+body, .theme-transition {
+  transition: background-color 240ms ease, color 240ms ease, border-color 240ms ease;
+}
+
+/* Quality floor: respect reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

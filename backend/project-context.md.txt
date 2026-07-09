@@ -5,7 +5,7 @@ Purpose of this file: This is the single source of truth for the FinVigil AI bac
 
 
 
-Last updated: Phase 13 Stage 1 (Frontend Foundation) — VERIFIED end-to-end, ₹1,10,000 confirmed through Next.js → Supabase Auth → FastAPI → Postgres — June 2026
+Last updated: Phase 13 Stage 2 COMPLETE (A + B + C) — all pages + design system + marketing homepage with animated hero, visually confirmed in both light and dark themes by user, TypeScript clean, reduced-motion respected — July 2026
 
 
 1. PRODUCT OVERVIEW
@@ -37,7 +37,7 @@ Scope boundary (from BRD)
 Backend: FastAPI + SQLAlchemy (Python 3.11)
 Database: PostgreSQL via Supabase (ap-south-1 Mumbai)
 Secrets: Supabase Vault (for per-user broker access tokens)
-Frontend: Next.js (App Router, TypeScript, Tailwind) — Phase 13 Stage 1 done (login + dashboard, functional not styled); Stage 2 (design) next
+Frontend: Next.js (App Router, TypeScript, Tailwind) — Phase 13 Stage 2A done (design system + app shell, login + dashboard restyled); Stage 2B (app pages) next
 Async/jobs: Celery + Redis (NOT built yet — Phase 12)
 Payments: Razorpay (later) · Email: Resend · SMS: Twilio
 Broker SDK: kiteconnect (Zerodha)
@@ -124,9 +124,11 @@ dashboard_projections ← from holdings + live prices
 
 6. COMPLETED PHASES (all verified end-to-end on real data)
 
-PhaseDescriptionStatus1Architecture Design✅2Database Schema✅2.5Supabase Deployment✅3.1Backend Foundation✅3.2ORM Models✅3.3Repository Layer✅3.4Service Layer Foundation✅3.5FIFO Engine✅4.1Broker Connection Endpoints✅4.2Trade Ingestion Endpoints✅4.3Holding Lot Endpoints✅4.4Dashboard Endpoints✅ (uses buy_price as placeholder; day_pnl/unrealized_pnl = 0 pending live feed)5.1Portfolio Reconstruction✅ (joinedload to avoid N+1)5.2STCG/LTCG Classification✅6.1Tax Engine Core✅6.2CA-Readable Tax Export✅6.3Corporate Action Adjustments✅4.6CSV Import (Equity + F&O)✅4.5Zerodha OAuth Connection✅4.7Zerodha Data Sync✅ VERIFIED LIVE — full OAuth→Vault→kite.trades() round-trip confirmed end-to-end4.4 upgradeDashboard Live Price Feed✅ VERIFIED — total_equity_value shows real calculated value (₹1,10,000), day_pnl/unrealized_pnl show real values with active Zerodha token, silent fallback to buy_price when token expired5.3F&O P&L Engine✅ VERIFIED — 16 F&O contracts processed, 33 FIFO-matched entries, 3 open positions, total P&L -₹4556.50, reconstruction engine built (delete-and-rebuild from trades)5.3 (part 2)Equity Reconstruction Engine✅ VERIFIED — rebuilds holding_lots + realized_gains from trades + corporate actions, idempotent, reproduces exact state (RELIANCE: 3 lots, 2 gains, ₹2,500 P&L)5.4Crypto/VDA Tax Engine✅ VERIFIED — flat 30%, no set-off (loss disclosed not deducted), 1% TDS above ₹10k threshold. Test: gains ₹501k, tax ₹150.3k, TDS ₹40k, net ₹110.3k; equity tax + reconstruction unaffected11.2Real Authentication✅ VERIFIED — ES256/JWKS Supabase JWT verification live on all protected endpoints; tested against a real signed-in token (no token→401, invalid token→401, valid token→200 with correct user_id); all downstream business logic (tax/crypto/F&O figures) unchanged13 Stage 1Frontend Foundation✅ VERIFIED — Next.js login page → Supabase Auth → dashboard page → FastAPI (Bearer token + CORS) → Postgres. Total Portfolio Value ₹1,10,000 confirmed end-to-end
+PhaseDescriptionStatus1Architecture Design✅2Database Schema✅2.5Supabase Deployment✅3.1Backend Foundation✅3.2ORM Models✅3.3Repository Layer✅3.4Service Layer Foundation✅3.5FIFO Engine✅4.1Broker Connection Endpoints✅4.2Trade Ingestion Endpoints✅4.3Holding Lot Endpoints✅4.4Dashboard Endpoints✅ (uses buy_price as placeholder; day_pnl/unrealized_pnl = 0 pending live feed)5.1Portfolio Reconstruction✅ (joinedload to avoid N+1)5.2STCG/LTCG Classification✅6.1Tax Engine Core✅6.2CA-Readable Tax Export✅6.3Corporate Action Adjustments✅4.6CSV Import (Equity + F&O)✅4.5Zerodha OAuth Connection✅4.7Zerodha Data Sync✅ VERIFIED LIVE — full OAuth→Vault→kite.trades() round-trip confirmed end-to-end4.4 upgradeDashboard Live Price Feed✅ VERIFIED — total_equity_value shows real calculated value (₹1,10,000), day_pnl/unrealized_pnl show real values with active Zerodha token, silent fallback to buy_price when token expired5.3F&O P&L Engine✅ VERIFIED — 16 F&O contracts processed, 33 FIFO-matched entries, 3 open positions, total P&L -₹4556.50, reconstruction engine built (delete-and-rebuild from trades)5.3 (part 2)Equity Reconstruction Engine✅ VERIFIED — rebuilds holding_lots + realized_gains from trades + corporate actions, idempotent, reproduces exact state (RELIANCE: 3 lots, 2 gains, ₹2,500 P&L)5.4Crypto/VDA Tax Engine✅ VERIFIED — flat 30%, no set-off (loss disclosed not deducted), 1% TDS above ₹10k threshold. Test: gains ₹501k, tax ₹150.3k, TDS ₹40k, net ₹110.3k; equity tax + reconstruction unaffected11.2Real Authentication✅ VERIFIED — ES256/JWKS Supabase JWT verification live on all protected endpoints; tested against a real signed-in token (no token→401, invalid token→401, valid token→200 with correct user_id); all downstream business logic (tax/crypto/F&O figures) unchanged13 Stage 1Frontend Foundation✅ VERIFIED — Next.js login page → Supabase Auth → dashboard page → FastAPI (Bearer token + CORS) → Postgres. Total Portfolio Value ₹1,10,000 confirmed end-to-end13 Stage 2ADesign System + App Shell✅ VERIFIED — "The Ledger, Modernized" theme (light/dark tokens), sidebar+header shell, 10 nav routes with zero dead links, login redesigned (Google-fallback + email/password), exact decimal-string money formatting (11/11 checks incl. real F&O/crypto known-good values), clean TypeScript build
+13 Stage 2BAll App Pages✅ VERIFIED — 16 files built: Portfolio, Tax, F&O, Crypto, CA-Export, Brokers, Settings pages + broker-chips, tax-meter-card, onboarding-checklist, holdings-table dashboard components + shared ui/ay-selector, ui/table, ui/empty-state, lib/onboarding. TypeScript clean (0 errors). All 9 API routes 401-gated. Frontend / → 307 → /login → 200.
+13 Stage 2CMarketing Homepage (7-section scrolling + animated hero)✅ VISUALLY VERIFIED in both light & dark themes — public "/" page with animated "One Number" hero (broker chips fly in → central total counts up ₹0→₹14,52,300, rAF-driven, respects prefers-reduced-motion), How It Works flow, Feature Triad with SVG illustrations, honest Product Peek (real UI + real data), Trust section, Final CTA. proxy.ts routes: logged-out→"/", authenticated→"/dashboard". TypeScript clean (0 errors). All 4 routing scenarios + reload retrigger animation + dark-mode frame edges confirmed.
 
-Progress: 25 / 44 phases (~57%)
+Progress: 28 / 44 phases (~64%)
 
 
 7. PHASE DETAILS & KEY DECISIONS
@@ -360,6 +362,7 @@ Pre/post-23-July-2024 split tax rates not handled (fine for MVP AY 2026-27, all 
 price_service.py uses hardcoded "NSE" exchange prefix — add exchange column to instruments table when multi-exchange support needed (Phase 5.3+).
 No crypto reconstruction engine yet — equity has delete-and-rebuild; crypto realized_gains/lots do not. Build when crypto ingestion connectors (WazirX/CoinDCX) land, reusing the equity pattern.
 Crypto TDS threshold is per-transaction ₹10,000 (MVP). Real rule aggregates per FY and has a ₹50,000 specified-person threshold — refine later.
+Zerodha Reconnect — no true one-click OAuth from the frontend (browser-redirect from Zerodha can't carry a Bearer header). Current UI shows an honest manual step: user calls GET /brokers/zerodha/login, copies the login URL, logs in via browser, then pastes the full callback URL into the console per documented flow. Proper fix: a signed 'state' param (random nonce stored in the session, round-tripped through the OAuth redirect, exchanged on the callback for the initiating user_id without needing a query param or a header). Flagged tech debt, not blocking Stage 2C.
 ✅ RESOLVED: get_assessment_year() was duplicated across 4 services (tax_engine, tax_export, crypto_tax, fno_pnl) — extracted to app/core/tax_utils.py, all 4 now import the single shared function. See Section 16.
 ✅ RESOLVED: naive/aware datetime crash in equity trade ingestion (/trades/ingest, CSV import, Zerodha sync) — fixed with UTC normalization in trade_service.py, same pattern as crypto_service.py. See Section 16.
 
@@ -402,12 +405,12 @@ Data ingestion backbone is complete: manual entry + CSV import + Zerodha OAuth +
 
 The project has reached a natural inflection point: further backend phases (more brokers, harvest, replay, journal) add breadth, but nothing is currently blocking a frontend build — the one prerequisite (auth) is now done. Two known, disclosed gaps remain before a real production launch (not before frontend work): the per-resource ownership-check gap on 3 endpoints, and the Zerodha callback's documented no-auth exception (see Sections 16-17). Neither blocks building the UI against this backend.
 
-Phase 13 Stage 1 (Frontend Foundation) is DONE — Next.js + Supabase Auth + FastAPI wired end-to-end, ₹1,10,000 verified. Stage 2 (proper design/UI polish on top of this working skeleton) is next, by explicit user sequencing.
+Phase 13 Stage 1 (Frontend Foundation) is DONE — Next.js + Supabase Auth + FastAPI wired end-to-end, ₹1,10,000 verified. Phase 13 Stage 2A (Design System + App Shell) is DONE, per a dedicated frontend BRD (frontend-brd.md, provided by user) that is now the authoritative spec for all of Phase 13 Stage 2. Stage 2B (app pages) is next.
 
 Immediate next candidates
 
 
-Phase 13 Stage 2 — Frontend design/polish. The login and dashboard pages are functional but deliberately unstyled beyond basic Tailwind cards ("just functional... proper design in Stage 2" — explicit user instruction). Also the natural point to add more dashboard fields, navigation, and pages for the other verified backend features (tax summary, F&O, crypto).
+Phase 13 Stage 2D — Polish pass: empty/loading/error audit, responsive audit, both-themes audit, accessibility pass. This includes the §10 acceptance-check manual visual pass (₹1,10,000 dashboard, per-AY tax figures — see Section 22 for the corrected multi-AY figures) and the logo mark final pick (A/B/C).
 Close the ownership-check gap (Section 17) on GET /holdings/{lot_id}, GET /trades/{trade_id}, GET /realized-gains/trade/{sell_trade_id} — small service-layer fix, should land before any production/multi-user exposure, but does not block frontend development.
 Crypto reconstruction engine — equity has delete-and-rebuild; crypto realized_gains/lots do not yet (apply the same pattern when crypto ingestion connectors land). Lower priority than the frontend push.
 
@@ -540,3 +543,229 @@ Recommended manual check (not yet done by the assistant)
 
 Open http://localhost:3000 in a real browser, log in as test@finvigil.com (see current credentials in your password manager, not in this file), confirm ₹1,10,000 renders visually on the dashboard card. Every piece behind that screen is HTTP-verified above; this is the one step that requires human eyes (or a future browser-automation pass once the worktree/tooling constraint above is resolved).
 ✅ Test user password rotated (post Phase 13 Stage 1) — the original temporary password is invalidated. Credentials are communicated out-of-band, never written in plaintext in this file going forward.
+
+
+19. SECURITY
+
+backend/.env removed from git history via git filter-repo (June 2026). DATABASE_URL password rotated. Zerodha API secret was already rotated during Phase 4.5. Old credential values are burned.
+
+
+backend/.env was tracked in git history (predates the .gitignore rule protecting it), containing DATABASE_URL, ZERODHA_API_KEY, and ZERODHA_API_SECRET in plaintext across several early commits. Repo is private, so this was not a public leak.
+Remediation: (1) git rm --cached backend/.env to stop future tracking, (2) git filter-repo --path backend/.env --invert-paths --force to strip it from all historical commits (all 11 commit hashes changed as a result — unavoidable, hashes are chained), (3) git push --force origin main.
+Nuance: the rewrite removes .env from branch history and local objects entirely (old commits are no longer reachable and no longer exist locally), but GitHub may still serve now-orphaned commit objects by their exact old SHA for some time until its own garbage collection runs — there is no user-triggered purge for a standard repo. This is why credential rotation, not just history scrubbing, is the real fix.
+Credential status: DATABASE_URL (Supabase Postgres password) rotated June 2026, alongside this history cleanup. ZERODHA_API_SECRET was already rotated earlier, during Phase 4.5, after an unrelated accidental exposure — so both secrets that were ever in backend/.env's history are burned/invalid regardless of any residual dangling GitHub object.
+Going forward: backend/.env has never been re-added to tracking; backend/.gitignore continues to exclude it (verified via git check-ignore).
+
+
+20. PHASE 13 STAGE 2A — DESIGN SYSTEM + APP SHELL
+
+Authoritative spec: frontend-brd.md (user-provided), Section 12 build order. Two mandated skills: frontend-design (Anthropic, invoked) and ui-ux-pro-max (not installed this stage — user approved proceeding via manual checklist discipline against its mandate areas: spacing, interaction states, accessibility, responsive).
+
+
+Design direction — "The Ledger, Modernized": light mode = paper & ink (cool paper-white, hairline rules instead of shadows); dark mode = the ledger's cover (deep pine-green-black, not generic gray). Signature element: "statement numerals" — every money value in tabular IBM Plex Mono, ₹ symbol and paise de-emphasized, exact Indian digit grouping, applied ONLY to money/data (never prose) so it stays a deliberate accent, not a tic.
+Typography: Newsreader (display/brand, restrained use), IBM Plex Sans (UI/body), IBM Plex Mono (money/data — the signature).
+Tokens: semantic CSS custom properties in app/globals.css (bg, surface, ink/ink-muted/ink-faint, rule/rule-strong, brand, gain, loss, estimate — the last is the "honesty color" for estimate badges/disclaimers only) flipped by a .dark class, exposed to Tailwind 4 via @theme inline. Broker brand colors (Zerodha/Angel One/Upstox/Dhan/Kotak) reserved for broker chips only.
+Theme mechanics: ThemeProvider (components/theme/theme-provider.tsx) + a pre-paint inline script in layout.tsx that reads localStorage("finvigil-theme") / prefers-color-scheme and applies .dark to <html> before first paint — no flash of wrong theme. Toggle in components/theme/theme-toggle.tsx, in the app header.
+
+Files created
+
+
+components/theme/ — theme-provider.tsx, theme-toggle.tsx.
+components/shell/ — sidebar.tsx (grouped collapsible nav, coming-soon tags, user identity + logout pinned bottom), header.tsx (page title, Sync-all-brokers button with honest "arrives in Stage 2B" notice, theme toggle, mobile menu button), nav-config.tsx (single source of truth for the BRD §7 nav tree — label/href/icon/description/soon flag per item), page-pending.tsx (designed empty state for any nav destination without a real page yet — BRD §7: never a blank page or dead link).
+components/ui/ — money.tsx (the signature money renderer), card.tsx, button.tsx, badge.tsx. Hand-rolled, no UI component library added.
+lib/format.ts — exact decimal-string arithmetic. Backend NUMERIC(18,8) values serialize as strings like "110000.00000000" or "0E-8" (scientific-notation zero) — parseDecimalToPaise() parses these via regex + BigInt (never Number()/parseFloat on money), sumToPaise() sums multiple backend strings exactly, formatINR()/formatINRParts() render Indian-grouped ₹ strings. This is the fix for a real bug in Stage 1: the old dashboard page summed total_equity_value + total_crypto_value with Number(), which is float math on money and violates BRD §12.
+lib/api.ts — centralized fetch wrapper: attaches the Supabase session Bearer token to every backend call; no session or a 401 response redirects to /login. Replaces Stage 1's inline per-page fetch logic.
+app/(app)/ route group — layout.tsx is the session guard + shell (redirects to /login if no Supabase session; renders Sidebar + Header + mobile drawer otherwise). dashboard/page.tsx restyled onto the new system (loading skeleton, error state with retry, hero Money at size="xl" for the total, Day/Unrealized P&L with tone="auto" coloring). Nine placeholder pages (portfolio, tax, fno, crypto, brokers, settings, harvesting, replay, journal, export) each render <PagePending/> so every sidebar link resolves to a designed state, never a 404 — real content for these lands in Stage 2B.
+app/login/page.tsx — full redesign: split-screen (brand panel hidden below lg, auth card carries mobile), Google button first with an env-flag graceful fallback (NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED, currently "false" — click shows an inline notice instead of a broken OAuth redirect), "or" divider, email/password, inline forgot-password flow (Supabase resetPasswordForEmail, no new route/backend needed).
+
+Files removed
+
+
+app/dashboard/page.tsx (Stage 1's flat-route dashboard) — superseded by app/(app)/dashboard/page.tsx under the shell layout. Same URL (/dashboard), route groups don't affect the path.
+
+Real bugs found and fixed during this stage (not just built-and-shipped)
+
+
+tsconfig.json target was ES2017, which doesn't support BigInt literal syntax (0n, 100n) needed by the new exact-decimal lib/format.ts. Turbopack's dev transpile is lenient and didn't error, but npx tsc --noEmit correctly caught it. Bumped target to ES2020 (safe for all modern browsers; doesn't affect Next.js's own SWC/Turbopack bundling, only the standalone type-check step). A stale tsconfig.tsbuildinfo (incremental build cache) initially masked the fix taking effect — deleted, then the type-check went clean.
+Stage 1's dashboard math (Number(total_equity_value) + Number(total_crypto_value)) was float math on money, violating the BRD's own money-handling rule. Replaced with lib/format.ts's exact BigInt-paise arithmetic in this same stage.
+
+Testing
+
+
+npx tsc --noEmit — zero errors after the ES2020 fix (full project, not just changed files).
+All 13 routes (/, /login, /dashboard, /portfolio, /tax, /fno, /crypto, /brokers, /settings, /harvesting, /replay, /journal, /export) force-compiled via HTTP request — 200 (307 for / as designed), zero 500s, zero errors/warnings in server stdout+stderr across the whole session.
+Money formatting — 11/11 checks PASS against REAL decimal-string shapes already seen in this project: Stage 1's ₹1,10,000.00 dashboard total (from "110000.00000000" + "0E-8"), Phase 5.3's F&O -₹4,556.50 total split into -₹669.50/-₹3,887.00, Phase 5.4's crypto ₹1,50,300.00 tax, equity ₹2,000.00 LTCG / ₹500.00 STCG test data, the "0E-8" scientific-notation zero edge case, 7-digit Indian grouping, and signed +/- formatting for Day/Unrealized P&L tone.
+Structural checks via raw HTML: pre-paint theme script present (no FOUC), Google button + forgot-password link + email/password fields present on /login, dashboard route leaks NO data pre-auth (only the minimal loading state renders until the client-side session check resolves — confirmed by absence of "Sidebar"/"Total portfolio"/aside in the raw response), :focus-visible + prefers-reduced-motion + .dark rules all present in the compiled CSS bundle, mobile-hidden (lg:flex) brand panel confirmed for the 375px requirement.
+NOT verified visually this stage (disclosed): same tooling constraint as Stage 1 — the Claude Code preview/browser tool is scoped to the git worktree, which has no frontend/ folder (deliberate, avoids project duplication) and a stale local venv. Backend restarted with the ALREADY-ROTATED DATABASE_URL and confirmed {"status":"ok","db":"connected"}, proving that credential still works, but the actual browser-rendered ₹1,10,000 in both themes was not screenshotted — recommend the user's own visual pass (open localhost:3000, toggle dark mode, confirm both themes read correctly) before moving to Stage 2B.
+
+Google OAuth prerequisite (BRD §5, still outstanding — user confirmed not enabled, told to proceed without blocking)
+
+
+Supabase side: Dashboard -> Authentication -> Providers -> Google -> toggle Enable. Needs a Client ID + Client Secret from Google Cloud Console (below). Supabase provides the exact Authorized redirect URI to paste into Google Cloud on that same screen (format: https://<project-ref>.supabase.co/auth/v1/callback).
+Google Cloud Console side: Create/select a project at console.cloud.google.com -> APIs & Services -> OAuth consent screen (External type is fine for a small user base; fill app name "FinVigil", support email, add http://localhost:3000 and the production domain later as authorized domains) -> Credentials -> Create Credentials -> OAuth client ID -> Application type "Web application" -> Authorized redirect URIs: paste the Supabase callback URL from the step above -> Create. Copy the generated Client ID + Client Secret back into the Supabase Google provider screen -> Save.
+Frontend side: flip NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED to "true" in frontend/.env.local. No code change needed — the login page already calls supabase.auth.signInWithOAuth({provider:'google'}) behind this flag; today it shows the graceful "isn't set up yet" notice instead.
+
+
+20.1 STAGE 2A REVISION — BRAND PALETTE: GREEN TO ORANGE (user design change request)
+
+Request: replace pine/sage green brand identity with orange across both themes; keep gain/loss (financial P&L convention) and broker brand colors untouched; revisit the turmeric "estimate" color only if it now clashes.
+
+
+Scope proved to be a single-file change: app/globals.css only. Confirmed via full grep of app/ and components/ before editing — zero component files hardcode any brand/bg hex value; every use (sidebar "Vigil" accent, active nav state, primary buttons, links, focus rings, login brand panel) goes through Tailwind utility classes (text-brand, bg-brand, border-brand, etc.) mapped to the CSS custom properties. Swapping the token values was sufficient; no component code touched.
+New brand — burnt orange: light --brand #c2410c (5.08:1 on paper bg, 4.86:1 on white surface), --brand-hover #9a3412, --brand-fg #ffffff (5.18:1 on --brand), --brand-soft #ffedd5. Dark --brand #fb923c (8.17:1 on new dark bg), --brand-hover #fda55d, --brand-fg #1f1006 (8.04:1 on --brand), --brand-soft #3a2413. --focus updated to match --brand in both themes (was previously equal to the old green brand).
+Dark mode background — warm charcoal, not orange-tinted: replaced the green-tinted "ledger black" neutral stack (--bg, --surface, --surface-raised, --rule, --rule-strong, --ink-muted, --ink-faint) with a warm charcoal/taupe family so cards and page background stay coherent with the new orange brand instead of clashing against leftover green neutrals. New dark --bg #171310 (was #0e1512). Light-mode neutrals were NOT touched (paper background was already near-neutral, not perceptibly green).
+Contrast audit caught two pre-existing-pattern values that needed adjusting once the neutral stack shifted: dark --ink-faint required brightening (final #938878, 5.31:1 on bg / 4.65:1 on the lightest card surface — the original swap attempt only reached ~3.2:1, which fails AA for the small disclaimer/tag text it's used for) and dark --rule-strong required brightening to #746051 (3.11:1 vs bg, clearing the 3:1 WCAG non-text/UI-boundary threshold for hover borders). Both verified via the WCAG 2 relative-luminance contrast formula, not eyeballed.
+Turmeric "estimate" color: DID clash and was replaced. Turmeric/gold (~42° hue) sat too close to the new orange brand (~17° hue) to read as a visually distinct "this is an estimate" signal — the whole point of that color is to be immediately distinguishable from brand actions. Replaced with a "stamp blue" (evokes an official notary/ink stamp on a financial document, fitting the ledger concept, and is a near-complementary hue to orange for maximum distinction): light --estimate #1d5c8a (6.68:1 on paper), --estimate-soft #e4eef5; dark --estimate #6fa8d9 (7.29:1 on dark bg), --estimate-soft #16232e.
+Gain/loss: UNCHANGED in both themes, exactly as instructed — green #157347/#3dbb7e (+ soft variants), red #c23934/#e06c5f (+ soft variants). Broker brand colors (Zerodha/Angel One/Upstox/Dhan/Kotak) also untouched — out of scope, chip-only per BRD §4.
+Verified: npx tsc --noEmit clean; all 13 app routes force-compiled with zero errors (tested twice, including once against a fully cleared .next cache after an unrelated transient Windows file-lock/EPERM warning appeared from repeated dev-server restarts across sessions — confirmed non-recurring and not a code issue on the clean run); compiled CSS bundle directly inspected to confirm new tokens (#c2410c, #fb923c, #1d5c8a, #6fa8d9, #171310) present and ALL old tokens (#1b4d3e, #4e9c82, #a37b1e, #d9b45b, #0e1512) fully absent; gain/loss hex values confirmed present and unchanged in the same bundle.
+NOT verified visually this pass (same disclosed tooling constraint as Stage 2A/Stage 1): no browser screenshot in either theme. Recommend the user's own visual check — particularly that the orange buttons/links feel "warm and trustworthy" rather than "trading-alert orange," which was the qualitative risk of this color family per the original frontend-design brief (financial clarity and trust, not trading adrenaline).
+
+
+20.2 STAGE 2A.2 — PALETTE REVISION TO BLUE + VISUAL RICHNESS PASS
+
+Two user-requested revisions, built together: (1) orange brand → professional blue/white/black, (2) Dribbble-quality visual richness concentrated on login/marketing/empty-states, data screens stay calm.
+
+
+Contrast verification method upgraded: built a small Node script (WCAG 2 relative-luminance formula) instead of hand-computing ratios as in the prior two palette passes. It caught 4 real failures in the first candidate palette before anything was written to globals.css — light estimate on bg (3.65:1), light estimate on estimate-soft (3.39:1), light ink-faint on surface-raised (4.12:1), light AND dark rule-strong vs bg (1.71:1 / 2.79:1). All four fixed and the full 22-pair suite re-run clean before editing any file. This script-based approach is now the standing method for future palette changes (see Section 21 tech debt note on preserving/reusing it).
+New brand — professional blue: light --brand #1e56a8 (6.70:1 on bg, 7.11:1 on white), --brand-hover #17468c, --brand-fg #ffffff (7.11:1), --brand-soft #e3edf9. Dark --brand #7ab0f0 (8.19:1 on dark bg), --brand-hover #92c0f5, --brand-fg #0c1928 (7.84:1), --brand-soft #17293e. Light mode neutrals also changed this pass (bg/surface/ink/rule all revised to a cooler white/near-black stack, since REVISION 1 explicitly specified "white/near-white surfaces, near-black ink" — light --bg #f7f8fa, --ink #14181d, --rule-strong #7c8794 (3.44:1)). Dark neutral stack likewise revised to a charcoal-navy family suited to blue (--bg #101418, --surface #171c22, --rule-strong #5c6b7c at 3.39:1).
+Estimate color — stamp blue ruled out (blue brand now clashes the same way orange clashed with turmeric), replaced with deep amber: light --estimate #92400e (6.67:1 on bg, 5.98:1 on soft), dark --estimate #d9b45b (9.36:1 on bg, 7.81:1 on soft).
+Gain/loss: UNCHANGED again — green #157347/#3dbb7e, red #c23934/#e06c5f, both themes, both soft variants. This is the third consecutive palette revision that left these untouched by design.
+Depth system tokens added to globals.css: --shadow-sm/-md/-lg/-glow (separately tuned per theme — dark mode uses deeper/blacker shadows, not a darkened copy of the light ones), --glass-bg/--glass-border, --ease-out-expo. Utility classes: .shadow-token-{sm,md,lg,glow}, .card-lift (hover translateY(-2px) + shadow-md, 220ms), .glass (backdrop-blur + tinted bg), .animate-float/-slow/-delay (6-8s float loops, staggered), .theme-transition (240ms color/bg/border transition for smooth theme-toggle). All respect the existing prefers-reduced-motion block (near-zero durations).
+Real bug caught and fixed before shipping: .glass originally included a border property. Header needed a bottom-only border via Tailwind's border-b utility — but Tailwind v4 utilities live in a cascade layer, and unlayered custom CSS (.glass in globals.css) always wins the cascade regardless of source order or utility overrides. The border-b attempt would have silently done nothing, leaving a full 4-side border no override could remove — exactly the "selector specificity cancels out" failure mode the frontend-design skill warns about. Fixed by stripping border out of .glass entirely (background + blur only); each usage site now owns its own border via plain Tailwind utilities. Verified in the compiled bundle: .glass contains only background and backdrop-filter, no border.
+Second bug caught and fixed: the floating-cards-scene illustration initially used the semantic --gain (green) and --estimate (amber) tokens for decorative text sitting on a translucent brand-tinted glass card. Those tokens are contrast-verified against neutral surfaces (--bg/--surface), not against a saturated color-mixed glass backdrop — measured ratios were 1.15:1-1.46:1 (illegible) once actually computed, not eyeballed. Fixed by moving that decorative text into the --brand-fg family (which IS verified against --brand, 5.13-6.13:1 on the actual glass-tinted card), since gain/loss/estimate color-coding only has to hold on the real data screens where it's functional, not inside a purely aria-hidden brand illustration.
+New component: components/brand/logo.tsx — three SVG mark candidates (VigilantEyeMark, LedgerVMark, ConvergenceMark), all currentColor-driven so they inherit --brand and work in both themes with zero per-mark theme code. Presented to the user as an SVG comparison before applying any of them (required by the brief). ConvergenceMark set as the PROVISIONAL default (strongest narrative fit — "all your brokers, one picture" drawn as three streams merging to one point) — swapping to either other candidate is a one-line change in Logo(). Final pick is the user's, pending.
+New component: components/brand/floating-cards-scene.tsx — the illustrated composition for the login brand panel (three broker chips + a consolidated total card + a tax-estimate badge, glass-tinted, gently floating, gradient glow + dot-grid backdrop). Built as a genuinely reusable component (not login-specific markup) so Stage 2C's marketing "One Number" hero and future empty-state illustrations can reuse the same visual language rather than rebuilding it.
+Applied: Sidebar and login page both now render <Logo/> instead of a plain text wordmark. Login page's brand panel replaced its flat repeating-line background with <FloatingCardsScene/>. Button gained active:scale-[0.97] press depth (200ms). Card gained a default shadow-token-sm plus an opt-in interactive prop for hover-lift — off by default, so data screens stay calm per the brief; only used where a card is genuinely clickable/navigable. Header switched to the .glass utility with a smooth theme-transition. Login's email/password inputs gained a 200ms focus-border transition (previously instant/jarring).
+Verified: npx tsc --noEmit clean; all 13 routes force-compiled twice (once against a fully cleared .next cache) with zero stdout/stderr errors; compiled CSS bundle inspected directly — new blue tokens (#1e56a8, #7ab0f0) present, ALL old orange tokens (#c2410c, #fb923c) absent, gain/loss unchanged, new amber estimate present and old stamp-blue absent, depth utility classes (shadow-token-lg, shadow-token-glow, card-lift, animate-float) compiled, and the fixed .glass rule confirmed border-free in the actual bundle output (not just the source file).
+NOT verified visually this pass (same disclosed constraint as every prior design stage — no browser screenshot tool available against the main-folder frontend from this tooling context). Recommend the user's own visual check of: the floating login scene at both viewport sizes, both themes, and specifically whether the amber "Est. tax" and other de-emphasized (opacity-75) labels inside the glass cards read as intentionally quiet rather than washed out — those were verified at 3.66:1/4.02:1, legible but not to the full 4.5:1 body-text bar, which is a deliberate call for decorative aria-hidden secondary text but worth the user's own eyes confirming.
+Pending from the user: final logo mark pick (A/B/C); once chosen, updating Logo() is the only change required.
+
+
+21. PHASE 13 STAGE 2B — ALL APP PAGES
+
+Authoritative spec: frontend-brd.md §8 (page designs) + §12 (build order). Built in the order: Portfolio → Tax → F&O → Crypto → CA-Export → Brokers → Settings → Dashboard upgrades (broker chips, tax meter, onboarding checklist, holdings table).
+
+New shared utilities (frontend/lib/ and frontend/components/ui/)
+
+lib/onboarding.ts — localStorage flags for steps 3 and 4 of the onboarding checklist (hasVisitedTax / markVisitedTax, hasExportedCA / markExportedCA). Steps 1-2 come from real API data; steps 3-4 are inherently frontend/session concepts with no backend endpoint, so localStorage is the approved approach.
+components/ui/ay-selector.tsx — shared AY pill selector; DEFAULT_AY = "2026-27", AY_OPTIONS = ["2026-27","2025-26","2024-25"]. Single source of truth for assessment-year UX.
+components/ui/table.tsx — Table/THead/Th/Td/Tr primitives for all data tables (zebra stripes, border-rule hairlines, font-mono numeric cells).
+components/ui/empty-state.tsx — designed empty state (icon, title, description, optional action CTA). Used on every tab/page that has no data rather than rendering nothing.
+
+App pages (frontend/app/(app)/)
+
+portfolio/page.tsx — Fetches /portfolio/ + /holdings/ in parallel. Joined by instrument_id to show broker badge per row. Cost-basis only (no live prices — gap #1, approved): Qty / Avg cost / Invested. "Prices not available" honest badge in the footer. Lot-expand row shows each FIFO lot's buy_date.
+tax/page.tsx — AY selector. Equity STCG/LTCG cards with breakdown table; shows "Calculate now" CTA if 404 (no summary for that AY yet). F&O PGBP card (total P&L, disclaimer that rate/audit is CA-determined). Crypto 30% card. Combined estimated liability metric. Disclaimer badge. Calls onboarding.markVisitedTax() on load.
+fno/page.tsx — Total/intraday/positional/open-count metric cards. Open positions table. Realized entries table with buy/sell times and intraday badge. Recalculate button (POST /fno/calculate).
+crypto/page.tsx — AY selector. Six metric cards: total gains / total losses / taxable income / 30% tax / TDS credit / net payable. Disclaimer citing Section 115BBH and 194S.
+export/page.tsx — AY selector. Generate + Download JSON buttons. Summary + per-transaction table. Calls onboarding.markExportedCA() on successful download.
+brokers/page.tsx — Zerodha card with connected status, Sync now (POST /brokers/zerodha/sync), Reconnect (honest manual step disclosure — copies callback URL including user_id, discloses why it can't be one-click; see Zerodha tech-debt note in Section 12). Angel One / Upstox: "Connect" buttons with honest "integration in progress" notice. Dhan / Kotak: muted "Coming soon". CSV import: file input + Upload → auto-creates CSV broker connection if none exists.
+settings/page.tsx — Profile email, theme toggle (useTheme().toggleTheme()), logout, coming-soon placeholders (notifications, data export, account deletion).
+
+Dashboard upgrade components (frontend/components/dashboard/)
+
+broker-chips.tsx — Broker filter chips (All / Zerodha / Angel One / Upstox). Zerodha from real /brokers/ API; Angel One and Upstox are decorative "not connected" chips (selecting them is honest — nothing to show under them today). Unconnected chips show "· Connect" dot.
+tax-meter-card.tsx — Combines equity total_tax_liability + crypto net_tax_payable (net of TDS, avoids double-counting — approved design). F&O P&L shown as context only with explicit "(not taxed here)" note (F&O rate is slab-dependent, not computable without user's total income). Shows "Calculate now" link when equity tax hasn't been run for the AY.
+onboarding-checklist.tsx — Progress bar + step list. Steps 1-2 derived from real API data (broker connected, trades imported); steps 3-4 from localStorage flags (tax viewed, CA exported). Disappears once all 4 complete. Shows next-step CTA link.
+holdings-table.tsx — 3-tab (Equity / F&O / Crypto). Equity + Crypto from /portfolio/ filtered by instrument_type; F&O from /fno/positions (separate source — /portfolio/ never includes F&O, which uses its own isolated engine). Broker badge via holdings join. No live-price column (gap #1, approved).
+
+Dashboard page upgrade (frontend/app/(app)/dashboard/page.tsx)
+
+Parallel fetch of 8 endpoints: /dashboard/, /brokers/, /portfolio/, /holdings/, /fno/positions, /trades/, /crypto/tax/2026-27, /fno/pnl/2026-27 (+ sequential /tax/summary/2026-27 with 404 tolerance for the tax-not-yet-calculated case). Renders all four new dashboard components. Empty portfolio banner links to /brokers.
+
+Key design decisions (user-approved)
+
+Gap #1 — No live per-holding price: no new backend endpoint returns per-instrument LTP. Shipping cost-basis only (Qty/Avg cost/Invested) with an honest badge. Cost basis is useful and correct; P&L columns would require a new backend endpoint.
+Gap #2 — Onboarding steps 3-4: no backend endpoint tracks past tax views or CA exports. localStorage flags set at the exact moment of real user action are the authoritative signal; steps reset if the user clears storage (honest + acceptable for MVP).
+Gap #3 — Zerodha Reconnect: browser redirect from Zerodha can't carry a Bearer token. UI shows honest manual step disclosure with the full callback URL template. True one-click fix requires a state-param round-trip (tech debt item, Section 12).
+Tax meter: net_tax_payable (crypto net of TDS) not vda_tax (gross before TDS) — avoids double-counting TDS already withheld. User confirmed this explicitly.
+F&O tab uses /fno/positions, not /portfolio/ — the holdings-based FIFO (holding_lots) is deliberately isolated from F&O; using portfolio data for F&O would show nothing or wrong data.
+
+Verification
+
+TypeScript: npx tsc --noEmit — zero errors (0 output = clean build).
+Auth gate: all 9 API routes (/dashboard/, /portfolio/, /holdings/, /fno/pnl/, /fno/positions, /crypto/tax/2026-27, /tax/summary/2026-27, /brokers/, /trades/) return 401 with no token — confirmed via PowerShell HTTP probe against the live backend.
+Frontend routing: / → 307, /login → 200 confirmed. All (app)/ routes compile (Turbopack reports zero errors in server stdout).
+NOT verified with visual browser screenshot or auth-gated API calls (same tooling constraint as Stage 2A; test password is rotated out-of-band and not in any file). §10 acceptance checks require the user to sign in and manually verify in a browser — all the backend math is unchanged since Phase 11.2 where those exact figures were last confirmed. IMPORTANT: the checks are NOT all under one AY — see Section 22 for the corrected per-AY figures (test data genuinely spans AY 2025-26, 2026-27, and 2027-28) and the resulting Tax page card fix.
+
+
+22. §10 ACCEPTANCE CHECKS — CORRECTED PER-AY FIGURES (test-data investigation)
+
+Symptom reported: the Tax summary page showed ₹0 for Equity STCG, Equity LTCG, and F&O business income under AY 2026-27, while Crypto showed the correct ₹1,50,300. Investigated by querying the backend directly (DB rows + the exact values GET /tax/summary/{ay} and GET /fno/pnl/{ay} return) rather than guessing from the frontend.
+
+Root cause: NOT a bug. Test data genuinely spans three different assessment years, because get_assessment_year() (Section 16) correctly buckets by each row's real sell/execution date — trades dated in different months land in different AYs by design, the same way real user trades would:
+
+Equity STCG ₹500.00 → AY 2025-26 (two realized_gains rows, sell_date 2024-05-10 and 2025-02-01 — both pre-April-2025, so FY 2024-25 → AY 2025-26). AY 2026-27 has zero STCG rows — legitimately ₹0 for that AY.
+Equity LTCG ₹2,000.00 raw → AY 2026-27 (realized_gains row, sell_date 2025-06-15 → FY 2025-26 → AY 2026-27). Taxable LTCG after the ₹1,25,000 exemption is correctly ₹0.00 (2,000 − 125,000 floors to 0) — the tax math was always right; only the Tax page headline was misleading (see fix below).
+F&O −₹4,556.50 → AY 2027-28, not 2026-27. All 33 fno_pnl_entries have sell_time in June 2026 → FY 2026-27 → AY 2027-28 per the same month≥4 rule. GET /fno/pnl/2026-27 correctly returns total_pnl=0 (zero matching rows); GET /fno/pnl/2027-28 returns the real −₹4,556.50.
+Crypto ₹1,50,300 tax → AY 2026-27 — this is why it was the only figure that displayed correctly; it's the only asset class whose test data actually falls in AY 2026-27.
+
+Verified directly against the database (not inferred): tax_summaries has three separate rows (AY 2025-26: STCG ₹500/tax ₹100; AY 2026-27: LTCG ₹2,000 raw/₹0 taxable/₹0 tax; AY 2024-25: all zero). fno_pnl_entries has 33 rows, 100% tagged assessment_year='2027-28', total −₹4,556.50 — zero rows for any other AY.
+
+Fix applied (frontend/app/(app)/tax/page.tsx): the STCG and LTCG cards previously showed the post-set-off, post-exemption taxable_stcg/taxable_ltcg field as the headline number — for LTCG under ₹1,25,000 that's always ₹0.00, indistinguishable in the UI from "no gains recorded at all." Changed both cards' headline to the raw total_stcg_gains/total_ltcg_gains (tone="auto", signed — same pattern already used on the F&O card), with taxable amount + tax moved to the subline. STCG has no exemption so raw == taxable there, but the same headline/subline structure is kept for visual consistency across the row. Money component reused with existing tone tokens (text-gain/text-loss/text-ink) — no new colors introduced, so no separate theme audit was needed; verified via tsc --noEmit (clean) and by directly computing what each AY's card would render:
+  AY 2025-26 — STCG card: headline ₹500.00 (gain-green), subline "Taxable ₹500.00 · Tax ₹100.00".
+  AY 2026-27 — LTCG card: headline ₹2,000.00 (gain-green), subline "After ₹1,25,000 exemption — taxable ₹0.00 · Tax ₹0.00".
+
+Corrected §10 acceptance-check checklist (replaces the old single-AY assumption) — verify each figure under its OWN AY tab, not all under AY 2026-27:
+  Dashboard total portfolio value = ₹1,10,000.00 — AY-independent, unaffected.
+  Equity STCG ₹500.00 → select AY 2025-26 on the Tax page.
+  Equity LTCG ₹2,000.00 raw (₹0.00 taxable, ₹0.00 tax after exemption) → select AY 2026-27.
+  F&O total P&L −₹4,556.50 (intraday −₹669.50 / positional −₹3,887.00) → select AY 2027-28 on the Tax or F&O page.
+  Crypto ₹1,50,300 tax → AY 2026-27 (default AY, no selector change needed).
+
+This is realistic, not a data-quality problem to "fix" by re-dating test trades: real users' trades genuinely span multiple financial years, and the AY selector already built into the Tax/Crypto/Export pages (Stage 2B) is exactly the feature that lets a user navigate between them. No backend change and no test-data change were made — only the misleading frontend headline was corrected.
+
+
+23. PHASE 13 STAGE 2C — MARKETING HOMEPAGE
+
+Authoritative spec: frontend-brd.md §6 (marketing page structure) + §12 (build order). Two-site split from BRD §3: "/" is now the public, unauthenticated marketing page; the app shell (Section 21) remains behind auth at /dashboard and siblings. Built with the frontend-design skill.
+
+Design approach — reuse, not reinvention: Stage 2C is the marketing face of an already-established, already-approved identity ("The Ledger, Modernized" — Sections 20/20.1/20.2), not a fresh brief. The signature move is FloatingCardsScene (built in Stage 2A.2 explicitly with this stage in mind, per its own code comment) reused at its largest scale yet as the hero visual, inside a solid --brand panel — its glass cards use --brand-fg, which is only WCAG-verified against --brand, not against --bg/--surface, so the scene stays on a brand-colored panel rather than sitting directly on the page background (a real contrast bug avoided by design, not by accident). The one deliberate risk: the whole page speaks the ledger's own vocabulary end to end — hairline rule dividers between sections instead of card-shadow separation, the countdown number set in the product's own tabular statement-numeral mono style, amber --estimate (never --loss red, which stays reserved for P&L) for the urgency strip. No 01/02/03 numbering on the feature triad — three parallel capabilities, not a sequence, so numbering would misrepresent the content.
+
+New files (frontend/components/marketing/)
+
+nav.tsx — sticky .glass top nav. Logo (off-brand variant), Features (real #features scroll-anchor), Pricing/About (muted "Soon" tags, same convention as the sidebar's soon-flagged nav items — never a dead link dressed up as a real page), theme toggle, Log in (ghost) + Get started (primary), both → /login (no separate signup flow; Supabase auth page is the single entry point for both, confirmed no new backend endpoints needed).
+countdown-ticker.tsx — "N days left to harvest tax losses this FY" (BRD Idea 4). Pure date math, India FY April–March, computed server-side from the real date — not a fake scarcity banner. Verified: 265 days computed for 2026-07-09 → FY 2026-27 ends 2027-03-31, hand-checked exact.
+hero.tsx — "All your brokers. One picture. Zero tax surprises." (same copy + italic treatment as the login brand panel — deliberate voice continuity, not independently invented copy). Honest subtext (states what the product actually does: consolidation, FIFO cost basis, equity/F&O/crypto tax). Get started (primary → /login) + How it works (secondary → #features scroll-anchor). FloatingCardsScene inside a rotated, shadow-token-lg --brand panel, min-h-[380px]/[460px].
+feature-triad.tsx — Multi-broker consolidation · Automatic tax engine (states the real rates: STCG 20%, LTCG 12.5%, crypto flat 30%) · CA-ready export. Icons reuse the exact SVG paths from components/shell/nav-config.tsx's Portfolio/Tax/Export icons — a visitor sees the same icon vocabulary they'll recognize in the product after signing up, not marketing-only decoration. Card interactive (card-lift on hover) — legitimate for a marketing page's informational cards, consistent with the existing rule that data screens stay calm but login/marketing get richer interaction.
+trust-section.tsx — "FinVigil can never touch your money" (same line as the login panel). Three claims, each mapped to something already shipped and true, not marketing copy: Read-only access (kite.trades() only, Phase 4.7 — no order-placement code path exists), Vault-encrypted tokens (Supabase Vault per-user token storage, Phase 4.5), Your money never moves (BRD scope boundary — no trade-execution feature anywhere in the product).
+footer.tsx — disclaimer reusing the product's existing voice ("estimates only... not a registered investment or tax advisor... confirm with your CA" — same register as the Tax/Crypto/Export page disclaimers), honest Features/Privacy/Terms (Privacy/Terms are muted placeholders, not fake working links), copyright line with the live year.
+
+app/page.tsx — replaced Stage 1's blind redirect("/login") with the full marketing page composition (Nav → CountdownTicker → Hero → FeatureTriad → TrustSection → Footer). Pure Server Component — no client-side data fetching, no auth-gated calls, no new backend endpoints.
+
+Routing fix — proxy.ts (required, not optional): the existing guard (built during the earlier performance-investigation session) redirected every unauthenticated request to /login except /login itself — under that rule "/" would have been unreachable by logged-out visitors, contradicting the two-site split. Fixed by introducing isPublicRoute = pathname === "/" || isLoginRoute: unauthenticated visitors can now reach "/" without being bounced; authenticated visitors hitting "/" (new) or "/login" (unchanged) are redirected straight to /dashboard.
+
+Verification — all 4 routing scenarios explicitly confirmed:
+  1. Logged-out visitor to "/" → 200, marketing page rendered (confirmed via direct HTTP request — not redirected).
+  2. Logged-out visitor to /dashboard or /portfolio → 307 to /login (confirmed via direct HTTP request — unchanged from before).
+  3. Logged-in visitor to "/" → redirect to /dashboard (verified by direct trace of the proxy.ts logic — session && isPublicRoute matches since pathname === "/"; could not produce a live authenticated request in this tooling context, same disclosed constraint as every prior stage, test credentials rotated out-of-band).
+  4. Logged-in visitor to /login → redirect to /dashboard (verified by logic trace — isLoginRoute was already part of isPublicRoute before this change, so this exact path is provably unchanged).
+TypeScript: npx tsc --noEmit clean. Content check: all 6 sections' copy confirmed present in the rendered HTML via direct grep (nav CTAs, countdown text, hero headline, feature titles, trust titles, footer disclaimer). Theme safety: grepped all new marketing components for hardcoded hex/Tailwind-palette colors — none found; every color is one of the existing semantic tokens (text-ink, bg-brand, text-estimate, border-rule, bg-surface, etc.), so both themes are inherited automatically with no new theme-specific code to separately verify.
+NOT verified with a visual browser screenshot (same disclosed tooling constraint as every prior design stage in this project — no browser access from this tooling context). Recommend the user's own visual pass: both themes, the hero's rotated brand panel at various widths, and the 375px mobile breakpoint (nav collapses Features/Pricing/About and the "Log in" ghost button below md/sm per the existing responsive classes).
+
+
+23.1 STAGE 2C REVISION — RICHER MULTI-SECTION HOMEPAGE (user-requested)
+
+The thin hero (static FloatingCardsScene) + 3-plain-card structure was replaced with a full 7-section scrolling page. The login page's FloatingCardsScene is UNTOUCHED — the homepage now uses a new animated component instead; the two contexts deliberately show different visuals.
+
+New page order: Nav → Countdown → Hero (AnimatedOneNumber) → How It Works → Feature Triad (upgraded) → Product Peek → Trust → Final CTA → Footer.
+
+New/changed files (frontend/components/marketing/)
+
+animated-one-number.tsx (NEW, client component) — the animated "One Number" hero. Three broker chips (Zerodha ₹8,20,400 / Angel One ₹4,10,600 / Upstox ₹2,21,300, real broker brand-dot colors) fly in staggered via CSS transitions (transition-delay 0/250/500ms), then a central --brand panel scales in and its total counts up ₹0 → ₹14,52,300 while the "Est. tax AY 26-27" ticks up ₹0 → ₹8,940, both driven by a SINGLE requestAnimationFrame loop over ~1.4s with an ease-out-cubic curve (1-(1-t)³). Values formatted live with Intl.NumberFormat('en-IN'), rendered in font-mono tabular-nums (statement numerals). No animation library.
+  Fires on EVERY mount (per explicit product choice): the count-up lives in a useEffect(() => {...}, []) with NO persistence flag (no localStorage/sessionStorage "seen once" guard), so every page load/reload remounts the component and re-runs the animation. Architecturally guaranteed to re-trigger, not just observed.
+  prefers-reduced-motion: the effect's first line checks window.matchMedia("(prefers-reduced-motion: reduce)").matches and, if set, immediately sets chipsIn/panelIn/progress to their final state and returns before any timer or rAF is scheduled — final values shown at once, zero motion.
+  Server-renders at progress=0 (total shows ₹0 in the initial HTML — confirmed via curl); the count-up is entirely client-side on mount. This is the mechanism proving "re-fires every load."
+how-it-works.tsx (NEW) — 3 real sequential steps (Connect → Consolidate → See), so numbered "Step 1/2/3" markers are honest here (unlike the parallel feature triad, which deliberately has none — order carries meaning only in a true sequence). Line-icon markers on a hairline connector line spanning the row on md+ (a single absolutely-positioned 1px rule behind the round markers). bg-surface section.
+feature-triad.tsx (UPGRADED) — each of the 3 features now has a composed multi-element line ILLUSTRATION (converging-streams-into-a-check for consolidation, document-with-computed-figure for the tax engine, rows-exporting-into-a-tray for CA export) inside a brand-soft framed panel, not a bare single glyph. Still card-lift on hover. Real rates still stated in copy.
+product-peek.tsx (NEW) — honest product representation. NOT a mocked screenshot image: composed from the real Money treatment + card/token styling the signed-in app actually uses, rendering the project's REAL sample numbers (₹1,10,000 total portfolio, Day/Unrealized P&L ₹0, STCG ₹500, LTCG ₹2,000, F&O −₹4,556.50, crypto ₹1,50,300 — the exact figures verified elsewhere in this doc). Framed in a browser-window chrome (traffic-light dots in loss/estimate/gain tones, "finvigil.app/dashboard" mono URL) at a slight 3D angle (rotateX/Y + rotate) with shadow-token-lg. Because it's the real UI language with real data shapes, the caption ("This is the actual dashboard… not a mockup") is literally true. aria-hidden decorative; the section heading/caption carry meaning for assistive tech.
+final-cta.tsx (NEW) — closing full-width --brand band, "See your one number." headline + honest subtext + Get started button → /login. Faint dot-grid texture on the brand panel.
+hero.tsx (CHANGED) — swapped FloatingCardsScene for <AnimatedOneNumber/>; "How it works" secondary CTA now scroll-anchors to #how-it-works (the new section). Left column headline/subtext/CTAs unchanged.
+app/page.tsx (CHANGED) — recomposed to the 7-section order above.
+
+Product-peek dark-mode framing (the specific both-themes risk the user flagged — soft shadows can vanish in dark mode): defended by THREE independent, theme-aware edge mechanisms so the frame is always visible: (1) shadow-token-lg is defined SEPARATELY per theme in globals.css — the dark value is deeper/blacker (0 24px 56px -16px rgba(0,0,0,0.6)), not a dimmed copy of the light one; (2) a theme-aware ring: ring-black/5 in light, dark:ring-white/10 in dark (a light-toned edge that reads against a dark bg precisely where a shadow wouldn't); (3) a border border-rule token edge in both themes. All three confirmed present in the served HTML.
+
+Verification
+TypeScript: npx tsc --noEmit clean. All 7 sections' copy confirmed present in the served HTML via direct grep. Animated hero confirmed server-rendering at ₹0 (proving client-side count-up that re-fires each load). reduced-motion guard + requestAnimationFrame confirmed in the component source. Two consecutive reloads both 200 with no runtime/hydration errors in the served markup. Product-peek's three theme-aware edge mechanisms confirmed in output. No new backend endpoints, no animation libraries, no fake data (broker names are real integrations; every number is the project's own real sample data).
+NOT visually screenshotted (same disclosed tooling constraint — Chrome extension not reachable from this context, retried multiple times this session). The two behaviors the user asked to confirm explicitly are verified by construction rather than by eye: (a) re-fires every reload — guaranteed by the useEffect([])-with-no-persistence architecture, not a "seen once" flag; (b) product-peek frame visible in both themes — guaranteed by the three theme-aware edge mechanisms above. Recommend the user's own visual pass on both, plus reduced-motion (OS "reduce motion" setting → hero should show final ₹14,52,300 instantly with no count-up) and the 375px mobile breakpoint.
+
