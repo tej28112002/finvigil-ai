@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1 import health, broker, trade, holding, dashboard, portfolio, realized_gain, tax, tax_export, corporate_action, csv_import, zerodha, fno_pnl, reconstruction, crypto, harvesting
+from app.api.v1 import health, broker, trade, holding, dashboard, portfolio, realized_gain, tax, tax_export, corporate_action, csv_import, zerodha, fno_pnl, reconstruction, crypto, harvesting, replay
 
 logger = logging.getLogger("finvigil")
 
@@ -57,3 +57,4 @@ app.include_router(fno_pnl.router, prefix="/api/v1")
 app.include_router(reconstruction.router, prefix="/api/v1")
 app.include_router(crypto.router, prefix="/api/v1")
 app.include_router(harvesting.router, prefix="/api/v1")
+app.include_router(replay.router, prefix="/api/v1")
