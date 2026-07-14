@@ -216,10 +216,13 @@ export default function BrokersPage() {
               }}
               aria-hidden="true"
             />
+            <span
+              className="h-3 w-3 shrink-0 rounded-sm"
+              style={{ backgroundColor: "var(--color-broker-zerodha)" }}
+              aria-hidden="true"
+            />
             <div>
-              <p className="font-medium" style={{ color: "var(--color-broker-zerodha)" }}>
-                Zerodha
-              </p>
+              <p className="font-medium text-ink">Zerodha</p>
               <p className="text-xs text-ink-muted">
                 {zerodha
                   ? zerodha.status === "active"

@@ -197,6 +197,10 @@ class TradeService:
 
     def get_trade_by_id(
         self,
-        trade_id: UUID
+        trade_id: UUID,
+        user_id: UUID,
     ) -> Trade | None:
-        return self.trade_repository.get_by_id(trade_id)
+        return self.trade_repository.get_by_id_and_user(
+            trade_id=trade_id,
+            user_id=user_id,
+        )

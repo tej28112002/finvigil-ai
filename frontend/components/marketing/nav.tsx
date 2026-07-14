@@ -11,8 +11,8 @@ import { Button } from "@/components/ui/button";
 export function MarketingNav() {
   return (
     <header className="glass theme-transition sticky top-0 z-30 border-b border-rule">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-        <Logo markSize={24} wordmarkClassName="text-xl" />
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+        <Logo markSize={22} wordmarkClassName="text-lg sm:text-xl" />
 
         <nav className="hidden items-center gap-7 md:flex" aria-label="Marketing">
           <a href="#features" className="text-sm font-medium text-ink-muted transition-colors hover:text-ink">
@@ -28,13 +28,15 @@ export function MarketingNav() {
           </span>
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <ThemeToggle />
           <Link href="/login" className="hidden sm:block">
             <Button variant="ghost">Log in</Button>
           </Link>
           <Link href="/login">
-            <Button variant="primary">Get started</Button>
+            <Button variant="primary" className="px-3 sm:px-4">
+              Get started
+            </Button>
           </Link>
         </div>
       </div>

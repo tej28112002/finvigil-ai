@@ -27,7 +27,7 @@ export function Hero() {
           <p className="text-sm font-medium text-ink-faint">
             Portfolio intelligence &amp; tax clarity for Indian investors
           </p>
-          <h1 className="font-display mt-4 text-5xl leading-[1.08] text-ink lg:text-6xl">
+          <h1 className="font-display mt-4 text-4xl leading-[1.08] text-ink sm:text-5xl lg:text-6xl">
             All your brokers.
             <br />
             One picture.

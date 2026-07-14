@@ -97,12 +97,12 @@ def list_trades(
 def get_trade(
     trade_id: UUID,
     trade_service: TradeService = Depends(get_trade_service),
-    # NOTE: requires a valid token but does not yet verify the trade belongs
-    # to this user — see project-context.md.txt Section 16 for the disclosed
-    # ownership-check gap on this endpoint.
     user_id: UUID = Depends(get_current_user_id),
 ):
-    trade = trade_service.get_trade_by_id(trade_id)
+    # Ownership enforced in the query (trade_id AND user_id) — another
+    # user's trade produces the same None as a nonexistent trade_id, so
+    # this 404 never confirms whether the UUID belongs to anyone.
+    trade = trade_service.get_trade_by_id(trade_id=trade_id, user_id=user_id)
     if not trade:
         raise HTTPException(
             status_code=404,

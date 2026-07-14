@@ -68,11 +68,14 @@ class ReconstructionService:
             )
         )
 
-        # STEP 2 — fetch equity trades only, in chronological order.
-        all_trades = self.trade_repository.get_by_user(user_id=user_id)
-        equity_trades = [
-            t for t in all_trades if t.instrument.instrument_type == "equity"
-        ]
+        # STEP 2 — fetch equity trades only, in chronological order. Scoped
+        # to instrument_type="equity" at the SQL level (was: fetch every
+        # trade the user has, then filter in Python via t.instrument, which
+        # lazy-loaded one extra round trip per distinct instrument — see the
+        # same fix in trade_repository.get_by_user()).
+        equity_trades = self.trade_repository.get_by_user_and_instrument_type(
+            user_id=user_id, instrument_type="equity"
+        )
         equity_trades.sort(key=lambda t: t.execution_time)
 
         holding_lots_created = 0

@@ -7,9 +7,10 @@ import { BrokerChips } from "@/components/dashboard/broker-chips";
 import { TaxMeterCard } from "@/components/dashboard/tax-meter-card";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { HoldingsTable } from "@/components/dashboard/holdings-table";
-import { DEFAULT_AY } from "@/lib/ay";
+import { DEFAULT_AY, getCurrentAY } from "@/lib/ay";
 import { apiFetchServer, getServerToken } from "@/lib/api-server";
-import { sumToPaise, decimalSign } from "@/lib/format";
+import { sumToPaise, decimalSign, parseDecimalToPaise } from "@/lib/format";
+import { computeTaxHealthScore } from "@/lib/harvest-score";
 import { DashboardClient } from "@/app/(app)/dashboard/dashboard-client";
 
 interface DashboardData {
@@ -28,13 +29,15 @@ interface FnoPosition { instrument_id: string; symbol: string; open_quantity: st
 interface EquityTax { total_tax_liability: string; }
 interface CryptoTax { net_tax_payable: string; }
 interface FnoPnl { total_pnl: string; }
+interface HarvestSummary { total_harvestable_loss: string; candidate_count: number; }
 
 export default async function DashboardPage() {
   // All data fetched server-side in parallel — no useEffect, no client waterfall.
   // Session is read ONCE and the token passed to every call below; reading it
   // per-call (the old pattern) measurably multiplied load time (see api-server.ts).
   const token = await getServerToken();
-  const [dashboard, brokers, portfolio, holdings, fnoPositions, trades, cryptoTax, fnoPnlAy, equityTax] =
+  const harvestAy = getCurrentAY(); // Phase 7 — harvesting is "right now", not DEFAULT_AY (see lib/ay.ts)
+  const [dashboard, brokers, portfolio, holdings, fnoPositions, trades, cryptoTax, fnoPnlAy, equityTax, harvestSummary] =
     await Promise.all([
       apiFetchServer<DashboardData>("/dashboard/", token),
       apiFetchServer<BrokerConnection[]>("/brokers/", token),
@@ -45,6 +48,7 @@ export default async function DashboardPage() {
       apiFetchServer<CryptoTax>(`/crypto/tax/${DEFAULT_AY}`, token),
       apiFetchServer<FnoPnl>(`/fno/pnl/${DEFAULT_AY}`, token),
       apiFetchServer<EquityTax>(`/tax/summary/${DEFAULT_AY}`, token),
+      apiFetchServer<HarvestSummary>(`/harvesting/summary/${harvestAy}`, token),
     ]);
 
   if (!dashboard) {
@@ -78,6 +82,18 @@ export default async function DashboardPage() {
     { label: "CA report exported", done: false, href: "/export", cta: "Generate a CA report" },
   ];
 
+  const candidateCount = harvestSummary?.candidate_count ?? 0;
+  const harvestableLossPaise = harvestSummary
+    ? -parseDecimalToPaise(harvestSummary.total_harvestable_loss) // stored signed-negative; score wants a magnitude
+    : 0n;
+  const totalOpenPositions = portfolioList.length + fnoList.length;
+  const taxHealthScore = computeTaxHealthScore({
+    candidateCount,
+    totalOpenPositions,
+    harvestableLossPaise,
+    totalPortfolioPaise: totalPaise,
+  });
+
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       {/* Broker chips + onboarding flags are client-only (localStorage + interactivity) */}
@@ -96,6 +112,8 @@ export default async function DashboardPage() {
         cryptoNetTax={cryptoTax?.net_tax_payable ?? null}
         fnoPnl={fnoPnlAy?.total_pnl ?? null}
         assessmentYear={DEFAULT_AY}
+        taxHealthScore={taxHealthScore}
+        harvestCandidateCount={candidateCount}
       />
 
       <div className="flex items-center gap-2">

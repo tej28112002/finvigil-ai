@@ -6,6 +6,7 @@ import { Card, MetricLabel } from "@/components/ui/card";
 import { Money } from "@/components/ui/money";
 import { BrokerChips } from "@/components/dashboard/broker-chips";
 import { TaxMeterCard } from "@/components/dashboard/tax-meter-card";
+import { TaxHealthScore } from "@/components/dashboard/tax-health-score";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { HoldingsTable } from "@/components/dashboard/holdings-table";
 import { onboarding } from "@/lib/onboarding";
@@ -25,6 +26,7 @@ export function DashboardClient({
   checklistSteps, dashboard, totalPaise,
   dayTone, unrealTone, portfolioEmpty,
   equityTax, cryptoNetTax, fnoPnl, assessmentYear,
+  taxHealthScore, harvestCandidateCount,
 }: {
   brokers: BrokerConnection[];
   portfolio: PortfolioItem[];
@@ -40,6 +42,8 @@ export function DashboardClient({
   cryptoNetTax: string | null;
   fnoPnl: string | null;
   assessmentYear: string;
+  taxHealthScore: number;
+  harvestCandidateCount: number;
 }) {
   const [brokerFilter, setBrokerFilter] = useState<string | null>(null);
 
@@ -83,8 +87,16 @@ export function DashboardClient({
         </Card>
       )}
 
+      {/* Row 1 — hero metrics. Total portfolio value spans 2 of 4 columns at
+          lg: it's the biggest number on the page (size="xl" statement
+          numerals) and was overflowing its card when it had to share an
+          equal 1/5 slot with four smaller-font cards in a single row. Day
+          P&L / Unrealized P&L keep the same 1-column width they always had
+          (this grid is still 4 columns at lg, same as before Tax Health
+          Score existed) — only Total Portfolio Value got wider, nothing
+          else got narrower. */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="p-5">
+        <Card className="p-5 lg:col-span-2">
           <MetricLabel>Total portfolio value</MetricLabel>
           <div className="mt-3">
             <Money value={BigInt(totalPaise)} size="xl" />
@@ -111,13 +123,20 @@ export function DashboardClient({
             <p className="mt-2 text-xs text-ink-faint">Based on last available prices</p>
           )}
         </Card>
+      </div>
 
+      {/* Row 2 — tax metrics. A separate, wider 2-column row (not squeezed
+          into row 1) so both cards get a full half-width slot instead of a
+          cramped 1/5 or 1/6. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <TaxMeterCard
           equityTax={equityTax}
           cryptoNetTax={cryptoNetTax}
           fnoPnl={fnoPnl}
           assessmentYear={assessmentYear}
         />
+
+        <TaxHealthScore score={taxHealthScore} candidateCount={harvestCandidateCount} />
       </div>
 
       <OnboardingChecklist steps={steps} />

@@ -109,7 +109,6 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: "Tax harvesting",
         href: "/harvesting",
-        soon: true,
         description:
           "Find losing positions to sell before March 31 and offset gains — cuts your tax bill legally.",
         icon: icon(

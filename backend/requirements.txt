@@ -15,6 +15,7 @@ et_xmlfile==2.0.0
 fastapi==0.136.3
 greenlet==3.5.1
 h11==0.16.0
+httpx==0.28.1  # test-only: required by fastapi.testclient.TestClient (tests/test_ownership_isolation.py)
 hyperlink==21.0.0
 idna==3.18
 Incremental==24.11.0

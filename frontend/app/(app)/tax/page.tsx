@@ -102,7 +102,7 @@ export default async function TaxPage({
             <MetricLabel>F&amp;O business income</MetricLabel>
             <Badge tone="neutral">PGBP</Badge>
           </div>
-          {fno && (
+          {fno ? (
             <>
               <div className="mt-3"><Money value={fno.total_pnl} size="lg" tone="auto" signed /></div>
               <p className="mt-1 text-xs text-ink-faint">
@@ -111,6 +111,8 @@ export default async function TaxPage({
                   : `${fno.realized_entry_count} realized entries this year.`}
               </p>
             </>
+          ) : (
+            <p className="mt-3 text-sm text-ink-muted">Not calculated yet for AY {ay}.</p>
           )}
         </Card>
 
@@ -120,13 +122,15 @@ export default async function TaxPage({
             <MetricLabel>Crypto / VDA</MetricLabel>
             <Badge tone="loss">30% flat</Badge>
           </div>
-          {crypto && (
+          {crypto ? (
             <>
               <div className="mt-3"><Money value={crypto.vda_tax} size="lg" /></div>
               <p className="mt-1 text-xs text-ink-faint">
                 No set-off on losses · TDS credit <Money value={crypto.total_tds_paid} size="sm" />
               </p>
             </>
+          ) : (
+            <p className="mt-3 text-sm text-ink-muted">Not calculated yet for AY {ay}.</p>
           )}
         </Card>
       </div>

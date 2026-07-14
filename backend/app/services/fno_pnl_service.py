@@ -32,13 +32,18 @@ class FnoPnlService:
         """
         Returns {instrument_id: {"symbol": str, "buys": [Trade], "sells": [Trade]}}
         for F&O instruments only. Equity/crypto trades are ignored.
+
+        Scoped to instrument_type="fno" at the SQL level (a JOIN + WHERE in
+        TradeRepository), not fetched-all-then-filtered-in-Python — fewer
+        rows transferred, and instrument is eager-loaded so touching
+        trade.instrument below triggers zero extra round trips.
         """
-        all_trades = self.trade_repository.get_by_user(user_id=user_id)
+        fno_trades = self.trade_repository.get_by_user_and_instrument_type(
+            user_id=user_id, instrument_type="fno"
+        )
         grouped: dict = {}
-        for trade in all_trades:
+        for trade in fno_trades:
             instrument = trade.instrument
-            if instrument.instrument_type != "fno":
-                continue
             group = grouped.setdefault(
                 trade.instrument_id,
                 {"symbol": instrument.symbol, "buys": [], "sells": []},

@@ -60,7 +60,7 @@ export function ProductPeek() {
             {/* Body */}
             <div className="space-y-4 p-5 lg:p-7">
               {/* Hero metric row */}
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <MiniMetric label="Total portfolio value" sub="Across all brokers">
                   <Money value="110000.00" size="lg" />
                 </MiniMetric>
@@ -76,7 +76,7 @@ export function ProductPeek() {
               </div>
 
               {/* Tax cards row — the real four figures */}
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border border-rule bg-surface p-4">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-medium uppercase tracking-wider text-ink-muted">Equity STCG</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "@/components/theme/theme-provider";
 import { Badge } from "@/components/ui/badge";
@@ -11,14 +11,31 @@ export default function SettingsPage() {
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
   const [email, setEmail] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
 
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
+  const loadProfile = useCallback(async () => {
+    setProfileLoading(true);
+    setProfileError(null);
+    try {
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       setEmail(session?.user.email ?? null);
-    });
+    } catch (err) {
+      setProfileError(
+        err instanceof Error ? err.message : "Could not load your profile"
+      );
+    } finally {
+      setProfileLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   async function handleLogout() {
     setSigningOut(true);
@@ -31,7 +48,22 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl space-y-4">
       <Card className="p-5">
         <MetricLabel>Profile</MetricLabel>
-        <p className="mt-2 text-sm text-ink">{email ?? "…"}</p>
+        {profileError ? (
+          <div className="mt-2 flex items-center gap-3">
+            <p className="text-sm text-loss" role="alert">{profileError}</p>
+            <button
+              type="button"
+              onClick={loadProfile}
+              className="cursor-pointer text-sm font-medium text-brand hover:text-brand-hover"
+            >
+              Try again
+            </button>
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-ink">
+            {profileLoading ? "Loading…" : (email ?? "—")}
+          </p>
+        )}
       </Card>
 
       <Card className="p-5">

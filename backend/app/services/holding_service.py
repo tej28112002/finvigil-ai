@@ -149,8 +149,10 @@ class HoldingLotService:
 
     def get_lot_by_id(
         self,
-        lot_id: UUID
+        lot_id: UUID,
+        user_id: UUID,
     ) -> HoldingLot | None:
-        return self.holding_repository.get_by_id(
-            id=lot_id
+        return self.holding_repository.get_by_id_and_user(
+            lot_id=lot_id,
+            user_id=user_id,
         )

@@ -31,8 +31,10 @@ class RealizedGainService:
 
     def get_gains_by_sell_trade(
         self,
-        sell_trade_id: UUID
+        sell_trade_id: UUID,
+        user_id: UUID,
     ) -> list[RealizedGain]:
-        return self.realized_gain_repository.get_by_sell_trade(
-            sell_trade_id=sell_trade_id
+        return self.realized_gain_repository.get_by_sell_trade_and_user(
+            sell_trade_id=sell_trade_id,
+            user_id=user_id,
         )

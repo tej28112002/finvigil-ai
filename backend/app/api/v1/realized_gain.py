@@ -54,11 +54,15 @@ def list_realized_gains_by_instrument(
 def list_realized_gains_by_trade(
     sell_trade_id: UUID,
     service: RealizedGainService = Depends(get_realized_gain_service),
-    # NOTE: requires a valid token but does not yet verify the sell trade
-    # belongs to this user — see project-context.md.txt Section 16 for the
-    # disclosed ownership-check gap on this endpoint.
     user_id: UUID = Depends(get_current_user_id),
 ):
+    # Ownership enforced in the query (sell_trade_id AND user_id) — another
+    # user's sell_trade_id now returns [] instead of their real gains. No
+    # 404 branch here (there never was one): this is a filtered-list
+    # endpoint, and an empty match was already a normal 200 [] response —
+    # the fix is that a cross-user ID can no longer produce someone else's
+    # data, not a new not-found status.
     return service.get_gains_by_sell_trade(
-        sell_trade_id=sell_trade_id
+        sell_trade_id=sell_trade_id,
+        user_id=user_id,
     )

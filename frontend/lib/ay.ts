@@ -10,3 +10,20 @@
  */
 export const DEFAULT_AY = "2026-27";
 export const AY_OPTIONS = ["2026-27", "2025-26", "2024-25"];
+
+/**
+ * The REAL current assessment year, computed from today's date — mirrors
+ * app.core.tax_utils.get_assessment_year() on the backend exactly (India FY
+ * April–March; AY = FY end year + 1). DEFAULT_AY above is a fixed constant
+ * from this project's original spec and is NOT "today" — as of when this
+ * was written DEFAULT_AY/AY_OPTIONS all map to already-closed FYs. Features
+ * that are inherently about "right now" (tax-loss harvesting: sell before
+ * THIS year's March 31) must use this, not DEFAULT_AY, or a countdown/engine
+ * built for a deadline that already passed.
+ */
+export function getCurrentAY(now: Date = new Date()): string {
+  const fyStartYear = now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+  const ayStartYear = fyStartYear + 1;
+  const ayEndYear = ayStartYear + 1;
+  return `${ayStartYear}-${String(ayEndYear).slice(2)}`;
+}

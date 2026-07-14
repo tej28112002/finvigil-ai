@@ -88,6 +88,27 @@ class HoldingLotRepository(BaseRepository[HoldingLot]):
         self.db.flush()
         return lot
 
+    def get_by_id_and_user(
+        self,
+        lot_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> HoldingLot | None:
+        """
+        Ownership-scoped single-lot lookup for GET /holdings/{lot_id}. A
+        mismatched owner and a genuinely nonexistent lot both fall through
+        to the same None result — the caller can't distinguish "doesn't
+        exist" from "exists but isn't yours" without a second query, which
+        is exactly the point: don't leak whether a resource exists at all.
+        """
+        return (
+            self.db.query(HoldingLot)
+            .filter(
+                HoldingLot.id == lot_id,
+                HoldingLot.user_id == user_id,
+            )
+            .first()
+        )
+
     def get_by_user(
         self,
         user_id: uuid.UUID

@@ -38,13 +38,14 @@ def list_holdings(
 )
 def get_holding(
     lot_id: UUID,
-    # NOTE: requires a valid token but does not yet verify the lot belongs
-    # to this user — see project-context.md.txt Section 16 for the disclosed
-    # ownership-check gap on this endpoint.
     user_id: UUID = Depends(get_current_user_id),
     service: HoldingLotService = Depends(get_holding_service)
 ):
-    lot = service.get_lot_by_id(lot_id=lot_id)
+    # Ownership is enforced in the query itself (filters by lot_id AND
+    # user_id) — a lot that exists but belongs to another user produces the
+    # exact same None as a lot that doesn't exist at all, so this 404 never
+    # leaks whether the UUID is real.
+    lot = service.get_lot_by_id(lot_id=lot_id, user_id=user_id)
     if not lot:
         raise HTTPException(
             status_code=404,

@@ -250,7 +250,7 @@ export default function LoginPage() {
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint transition-colors duration-200 focus:border-brand focus:outline-none"
+                    className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint transition-colors duration-200 focus:border-brand"
                     placeholder="••••••••"
                   />
                 </div>
@@ -301,7 +301,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint transition-colors duration-200 focus:border-brand focus:outline-none"
+        className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint transition-colors duration-200 focus:border-brand"
       />
     </div>
   );

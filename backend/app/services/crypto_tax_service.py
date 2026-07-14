@@ -1,7 +1,7 @@
 from decimal import Decimal
 from uuid import UUID
 
-from app.core.tax_utils import get_assessment_year
+from app.core.tax_utils import get_ay_date_range
 from app.repositories.realized_gain_repository import RealizedGainRepository
 from app.repositories.tds_ledger_repository import TdsLedgerRepository
 
@@ -34,14 +34,17 @@ class CryptoTaxService:
         user_id: UUID,
         assessment_year: str,
     ) -> dict:
-        gains = self.realized_gain_repository.get_by_user_and_income_type(
+        # Scoped to this AY's date range at the SQL level — previously
+        # fetched the user's entire crypto gain/TDS history on every call
+        # and filtered by AY in Python (correct, but fetches strictly more
+        # rows every year as real trading history accumulates).
+        start, end = get_ay_date_range(assessment_year)
+        gains_in_ay = self.realized_gain_repository.get_by_user_income_type_and_date_range(
             user_id=user_id,
             income_type=INCOME_TYPE_CRYPTO,
+            start=start,
+            end=end,
         )
-        gains_in_ay = [
-            g for g in gains
-            if get_assessment_year(g.sell_date) == assessment_year
-        ]
 
         total_vda_gains = ZERO
         total_vda_losses = ZERO
@@ -56,12 +59,14 @@ class CryptoTaxService:
         taxable_vda_income = total_vda_gains
         vda_tax = taxable_vda_income * VDA_TAX_RATE
 
-        # TDS already deducted this AY (credit against tax).
-        tds_entries = self.tds_ledger_repository.get_by_user(user_id=user_id)
+        # TDS already deducted this AY (credit against tax) — same SQL-level
+        # AY scoping as the gains query above.
+        tds_entries = self.tds_ledger_repository.get_by_user_and_date_range(
+            user_id=user_id, start=start, end=end
+        )
         total_tds_paid = ZERO
         for entry in tds_entries:
-            if get_assessment_year(entry.timestamp) == assessment_year:
-                total_tds_paid += Decimal(str(entry.amount))
+            total_tds_paid += Decimal(str(entry.amount))
 
         net_tax_payable = vda_tax - total_tds_paid
 

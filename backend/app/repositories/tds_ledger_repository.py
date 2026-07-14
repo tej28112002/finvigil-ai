@@ -33,3 +33,25 @@ class TdsLedgerRepository(BaseRepository[TdsLedgerEntry]):
             .order_by(TdsLedgerEntry.timestamp.desc())
             .all()
         )
+
+    def get_by_user_and_date_range(
+        self,
+        user_id: uuid.UUID,
+        start: datetime,
+        end: datetime,
+    ) -> list[TdsLedgerEntry]:
+        """
+        Same as get_by_user() but scoped to a [start, end) timestamp range
+        at the SQL level — pass get_ay_date_range(assessment_year). See the
+        matching method on RealizedGainRepository for why this exists.
+        """
+        return (
+            self.db.query(TdsLedgerEntry)
+            .filter(
+                TdsLedgerEntry.user_id == user_id,
+                TdsLedgerEntry.timestamp >= start,
+                TdsLedgerEntry.timestamp < end,
+            )
+            .order_by(TdsLedgerEntry.timestamp.desc())
+            .all()
+        )
