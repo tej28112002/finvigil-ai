@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { onboarding } from "@/lib/onboarding";
 import { Itr3ExportButton } from "@/app/(app)/tax/itr3-export-button";
+import { CaBundleButton } from "@/app/(app)/tax/ca-bundle-button";
 
 export function TaxActions({ ay, equityMissing }: { ay: string; equityMissing: boolean }) {
   const router = useRouter();
@@ -45,6 +46,7 @@ export function TaxActions({ ay, equityMissing }: { ay: string; equityMissing: b
         Export CA report
       </Button>
       <Itr3ExportButton ay={ay} />
+      <CaBundleButton ay={ay} />
     </div>
   );
 }
