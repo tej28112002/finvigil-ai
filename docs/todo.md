@@ -12,13 +12,13 @@
 - [ ] Press section (after coverage)
 
 ## Billing
-- [ ] Test webhook with Razorpay dashboard
-- [ ] Add GROQ_API_KEY to .env for Voice Journal
+- [ ] Test webhook with Razorpay dashboard (verified via manually-signed HMAC requests against a live server instead — real signature verification + full event state machine tested; the actual Razorpay dashboard test-event sender UI itself hasn't been used)
+- [x] Add GROQ_API_KEY to .env for Voice Journal (done — verified with a real synthesized-speech transcription, exact word-for-word match)
 
 ## Phase 14 — Admin Panel roles
-- [ ] Full role-based access control
-- [ ] Feature flags
-- [ ] User management
+- [x] Full role-based access control (user/support/admin on user_tax_personas.role)
+- [x] Feature flags (global default + per-user override, both verified against real DB)
+- [x] User management (list, detail, role toggle)
 
 ## Phase 15 — Testing
 - [ ] Unit tests for FIFO engine

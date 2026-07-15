@@ -1,6 +1,6 @@
 # FinVigil AI — Project Status
 
-## Completed Phases (35/45 — 78%)
+## Completed Phases (36/45 — 80%)
 Phase 1    Architecture Design
 Phase 2    Database Schema
 Phase 2.5  Supabase Deployment
@@ -38,10 +38,10 @@ Phase 11.1 CA Export ZIP Bundle (ITR-3 schedules + CSV + harvest data + README, 
 Phase 12a  Razorpay Billing (subscription model, webhook handler w/ HMAC verification, entitlement enforcement, grace period)
 Phase 12c  Razorpay real-credential integration (plan IDs, API keys, webhook secret configured; create/cancel/webhook all verified against Razorpay's real test-mode API — not just self-signed local tests)
 Phase 10   Voice Journal Pipeline (Groq Whisper STT, fixed psychology taxonomy, text-entry fallback, cascade delete — FR-JRN-01 to 03)
+Phase 14   Admin Panel (role-based access: user/support/admin; user management; feature flags; scoped read-only impersonation + broker resync; full audit log — FR-ADM-01/02)
 
-## Remaining Phases (10/45 — 22%)
+## Remaining Phases (9/45 — 20%)
 Phase 12b  Celery + Redis (no scheduled jobs exist yet — grace-period downgrade is lazy/read-triggered via GET /billing/subscription, not proactive; also blocks FR-HAR-03's daily 06:00 IST harvest job)
-Phase 14   Admin Panel (role-based access — is_admin guard now on /admin/itr-schemas WRITE endpoints only; full RBAC/impersonation/feature-flags still unbuilt)
 Phase 15   Testing + CA Validation
 Phase 16   Closed Beta
 Phase 17   Production Launch
@@ -53,9 +53,16 @@ Phase 17   Production Launch
 - Still open: no Celery job to proactively downgrade an expired-grace subscription (lazy/read-triggered only — see Phase 12b above); webhooks are correlated by notes, not the new ID column.
 
 ## Known Journal Limitations (Phase 10)
-- GROQ_API_KEY is an empty placeholder in backend/.env — the voice-recording path (POST /journal/entries/audio) is untested against Groq's real Whisper API and will 503 until a key is added. The text-entry path (POST /journal/entries/text) has no such dependency and was fully tested against the real DB (create, tag, list, ownership isolation, cascade delete).
+- GROQ_API_KEY is now set in backend/.env and POST /journal/entries/audio was verified against Groq's REAL Whisper API — a synthesized speech WAV file was transcribed and the returned text matched the source audio exactly, word for word. The text-entry path (POST /journal/entries/text) was also fully tested (create, tag, list, ownership isolation, cascade delete).
 - The 12-tag psychology taxonomy in app/core/journal_taxonomy.py (fear, greed, fomo, revenge_trading, overconfidence, hesitation, impatience, discipline, patience, regret, anxiety, boredom) is this build's own reasonable default — the BRD names "Fixed psychology taxonomy" as a requirement but doesn't enumerate the actual tags. Easy to revise; every tag name is checked against this one list in JournalService.add_tags().
 - No AI-based auto-tag-suggestion or LLM coaching feedback was built — BRD's locked FR-JRN-01/02/03 text only requires transcription + fixed tagging + cascade delete; an older informal project doc mentioned "linked to trades" and AI coaching, but that's not in the locked BRD, so it wasn't built.
+
+## Known Admin Panel Limitations (Phase 14)
+- "Impersonation" is deliberately NOT a real session swap. There's no SUPABASE_SERVICE_ROLE_KEY in this project to mint a session as another user, and building that would be a materially bigger, more security-sensitive feature than what was scoped. Instead, GET /admin/users/{id}/impersonate-view returns a read-only data summary (profile, subscription, broker connections, dashboard totals) queried on the admin's behalf — the admin never "becomes" the user. The one write BRD FR-ADM-02 explicitly permits (broker resync) is a separate endpoint, always attributed to the admin's own action in admin_audit_logs, never disguised as the target user acting.
+- "User notified" (also FR-ADM-02) is NOT implemented — no notification system (FR-NOT-*) exists yet in this project to notify a user that their account was viewed.
+- Role model is a single `role` column (user/support/admin) on user_tax_personas, not a separate roles/permissions table — sufficient for the 3-tier hierarchy asked for for this phase. The original `is_admin` boolean is kept on the table (backfilled to role='admin' where TRUE) but is no longer read by any code path.
+- DPDP data export on request (FR-ADM-03) was NOT built this phase — only FR-ADM-01 (feature flags) and FR-ADM-02 (impersonation, scoped as above) were in the explicit build list.
+- Feature flags are checked via AdminService.check_feature_flag() but nothing in the app calls it yet — the mechanism exists and is tested (global default + per-user override precedence verified against the real DB), but no existing feature (Monte Carlo, Harvest, etc.) has been wired to actually consult a flag.
 
 ## Marketing Pages (Pricing, About)
 - New `frontend/app/(marketing)/` route group with a shared layout (nav + footer), `pricing/page.tsx`, and `about/page.tsx`. Nav SOON badges removed — Pricing/About are real links now.

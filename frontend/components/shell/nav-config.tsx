@@ -230,6 +230,44 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Admin",
     items: [
       {
+        label: "Dashboard",
+        href: "/admin",
+        description: "User counts, roles, and recent admin activity.",
+        icon: icon(
+          <>
+            <rect x="3" y="3" width="7" height="9" rx="1" />
+            <rect x="14" y="3" width="7" height="5" rx="1" />
+            <rect x="14" y="12" width="7" height="9" rx="1" />
+            <rect x="3" y="16" width="7" height="5" rx="1" />
+          </>
+        ),
+      },
+      {
+        label: "Users",
+        href: "/admin/users",
+        description:
+          "List users, view subscription status, toggle roles, and open a read-only support view.",
+        icon: icon(
+          <>
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </>
+        ),
+      },
+      {
+        label: "Feature flags",
+        href: "/admin/feature-flags",
+        description: "Global defaults and per-user overrides for gating features.",
+        icon: icon(
+          <>
+            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+            <path d="M4 22v-7" />
+          </>
+        ),
+      },
+      {
         label: "ITR-3 schemas",
         href: "/admin/itr-schemas",
         description:

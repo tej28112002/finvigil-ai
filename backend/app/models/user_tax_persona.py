@@ -9,11 +9,15 @@ from app.models.base import Base, TimestampMixin
 
 class UserTaxPersona(TimestampMixin, Base):
     """
-    Per-user tax persona settings (BRD FR-PLT-03) plus is_admin — a minimal
-    role flag added for the ITR schema Admin Panel (no separate roles table
-    yet; a real RBAC model is Phase 14). user_id is the primary key, not a
-    UUIDMixin id — this table is a 1:1 extension of auth.users, not an
-    independently-identified entity.
+    Per-user tax persona settings (BRD FR-PLT-03) plus role (Phase 14
+    RBAC). user_id is the primary key, not a UUIDMixin id — this table is
+    a 1:1 extension of auth.users, not an independently-identified entity.
+
+    is_admin is the ORIGINAL boolean flag (pre-Phase-14) — kept, not
+    dropped, and backfilled to role='admin' where it was TRUE. `role` is
+    now the authoritative field (checked by admin_auth.py); is_admin is no
+    longer read by any code path but stays for historical/audit purposes
+    rather than a destructive column drop.
     """
 
     __tablename__ = "user_tax_personas"
@@ -42,4 +46,13 @@ class UserTaxPersona(TimestampMixin, Base):
         nullable=False,
         default=False,
         server_default="false",
+    )
+    role: Mapped[str] = mapped_column(
+        ENUM(
+            "user", "support", "admin",
+            name="admin_role_enum",
+            create_type=False,
+        ),
+        nullable=False,
+        server_default="user",
     )

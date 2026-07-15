@@ -18,6 +18,9 @@ class SubscriptionRepository(BaseRepository[Subscription]):
             .first()
         )
 
+    def get_all(self) -> list[Subscription]:
+        return self.db.query(Subscription).all()
+
     def create_default_free(self, user_id: uuid.UUID) -> Subscription:
         return self.create(
             user_id=user_id,
