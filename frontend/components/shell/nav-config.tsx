@@ -175,7 +175,6 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: "Journal",
         href: "/journal",
-        soon: true,
         description:
           "Voice notes on your trades — recorded, transcribed, searchable.",
         icon: icon(

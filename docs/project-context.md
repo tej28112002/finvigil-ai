@@ -1,6 +1,6 @@
 # FinVigil AI — Project Status
 
-## Completed Phases (34/45 — 76%)
+## Completed Phases (35/45 — 78%)
 Phase 1    Architecture Design
 Phase 2    Database Schema
 Phase 2.5  Supabase Deployment
@@ -37,9 +37,9 @@ FR-AIS-05  Schema-driven ITR-3 JSON Export (Admin Panel schema upload, no-code a
 Phase 11.1 CA Export ZIP Bundle (ITR-3 schedules + CSV + harvest data + README, in-memory zip)
 Phase 12a  Razorpay Billing (subscription model, webhook handler w/ HMAC verification, entitlement enforcement, grace period)
 Phase 12c  Razorpay real-credential integration (plan IDs, API keys, webhook secret configured; create/cancel/webhook all verified against Razorpay's real test-mode API — not just self-signed local tests)
+Phase 10   Voice Journal Pipeline (Groq Whisper STT, fixed psychology taxonomy, text-entry fallback, cascade delete — FR-JRN-01 to 03)
 
-## Remaining Phases (11/45 — 24%)
-Phase 10   Voice Journal Pipeline
+## Remaining Phases (10/45 — 22%)
 Phase 12b  Celery + Redis (no scheduled jobs exist yet — grace-period downgrade is lazy/read-triggered via GET /billing/subscription, not proactive; also blocks FR-HAR-03's daily 06:00 IST harvest job)
 Phase 14   Admin Panel (role-based access — is_admin guard now on /admin/itr-schemas WRITE endpoints only; full RBAC/impersonation/feature-flags still unbuilt)
 Phase 15   Testing + CA Validation
@@ -51,6 +51,11 @@ Phase 17   Production Launch
 - Webhook correlation is still via `notes.finvigil_user_id` (set at creation), not a `WHERE razorpay_subscription_id = ...` lookup — both would work now that the column exists; not changed since correctness doesn't depend on it and re-plumbing wasn't asked for.
 - RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET / RAZORPAY_WEBHOOK_SECRET / RAZORPAY_PLAN_PRO_MONTHLY / RAZORPAY_PLAN_PRO_ANNUAL / RAZORPAY_PLAN_PREMIUM_MONTHLY / RAZORPAY_PLAN_PREMIUM_ANNUAL are all set in backend/.env (test-mode). create-subscription, cancel-subscription, and the webhook signature+event flow were all verified against Razorpay's real test API, not just local self-signed tests.
 - Still open: no Celery job to proactively downgrade an expired-grace subscription (lazy/read-triggered only — see Phase 12b above); webhooks are correlated by notes, not the new ID column.
+
+## Known Journal Limitations (Phase 10)
+- GROQ_API_KEY is an empty placeholder in backend/.env — the voice-recording path (POST /journal/entries/audio) is untested against Groq's real Whisper API and will 503 until a key is added. The text-entry path (POST /journal/entries/text) has no such dependency and was fully tested against the real DB (create, tag, list, ownership isolation, cascade delete).
+- The 12-tag psychology taxonomy in app/core/journal_taxonomy.py (fear, greed, fomo, revenge_trading, overconfidence, hesitation, impatience, discipline, patience, regret, anxiety, boredom) is this build's own reasonable default — the BRD names "Fixed psychology taxonomy" as a requirement but doesn't enumerate the actual tags. Easy to revise; every tag name is checked against this one list in JournalService.add_tags().
+- No AI-based auto-tag-suggestion or LLM coaching feedback was built — BRD's locked FR-JRN-01/02/03 text only requires transcription + fixed tagging + cascade delete; an older informal project doc mentioned "linked to trades" and AI coaching, but that's not in the locked BRD, so it wasn't built.
 
 ## Architecture Rules
 - flush() in repositories, never commit()

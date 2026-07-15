@@ -1,5 +1,5 @@
-import { PagePending } from "@/components/shell/page-pending";
+import { JournalClient } from "./journal-client";
 
 export default function JournalPage() {
-  return <PagePending />;
+  return <JournalClient />;
 }

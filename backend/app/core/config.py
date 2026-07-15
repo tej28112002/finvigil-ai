@@ -24,6 +24,10 @@ class Settings:
     RAZORPAY_PLAN_PREMIUM_MONTHLY: str = os.environ.get("RAZORPAY_PLAN_PREMIUM_MONTHLY", "")
     RAZORPAY_PLAN_PREMIUM_ANNUAL: str = os.environ.get("RAZORPAY_PLAN_PREMIUM_ANNUAL", "")
 
+    # Phase 10 — Voice Journal STT (Groq Whisper-compatible API). Empty
+    # until an admin pastes a real key from console.groq.com.
+    GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
+
 
 settings = Settings()
 
