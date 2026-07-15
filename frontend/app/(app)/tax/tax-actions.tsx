@@ -6,6 +6,7 @@ import { AYSelector } from "@/components/ui/ay-selector";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { onboarding } from "@/lib/onboarding";
+import { Itr3ExportButton } from "@/app/(app)/tax/itr3-export-button";
 
 export function TaxActions({ ay, equityMissing }: { ay: string; equityMissing: boolean }) {
   const router = useRouter();
@@ -43,6 +44,7 @@ export function TaxActions({ ay, equityMissing }: { ay: string; equityMissing: b
       <Button variant="secondary" onClick={() => router.push(`/export?ay=${ay}`)}>
         Export CA report
       </Button>
+      <Itr3ExportButton ay={ay} />
     </div>
   );
 }

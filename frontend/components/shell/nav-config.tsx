@@ -216,6 +216,24 @@ export const NAV_GROUPS: NavGroup[] = [
       },
     ],
   },
+  {
+    label: "Admin",
+    items: [
+      {
+        label: "ITR-3 schemas",
+        href: "/admin/itr-schemas",
+        description:
+          "Upload each year's CBDT field-name mapping to enable ITR-3 export — no code deploy needed.",
+        icon: icon(
+          <>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z" />
+            <path d="M14 2v6h6" />
+            <path d="M9 13h6M9 17h6" />
+          </>
+        ),
+      },
+    ],
+  },
 ];
 
 export function findNavItem(pathname: string): NavItem | undefined {
