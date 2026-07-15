@@ -1,5 +1,5 @@
-import { PagePending } from "@/components/shell/page-pending";
+import { ReplayClient } from "./replay-client";
 
 export default function ReplayPage() {
-  return <PagePending />;
+  return <ReplayClient />;
 }
