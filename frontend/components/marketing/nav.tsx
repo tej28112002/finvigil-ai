@@ -5,9 +5,7 @@ import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 
-/** Marketing top nav (BRD §6.1). Pricing/About are honest placeholders —
- * muted and non-navigating, same "soon" convention as the app sidebar,
- * never a dead link dressed up as a real page. */
+/** Marketing top nav (BRD §6.1). */
 export function MarketingNav() {
   return (
     <header className="glass theme-transition sticky top-0 z-30 border-b border-rule">
@@ -18,14 +16,12 @@ export function MarketingNav() {
           <a href="#features" className="text-sm font-medium text-ink-muted transition-colors hover:text-ink">
             Features
           </a>
-          <span className="flex items-center gap-1.5 text-sm font-medium text-ink-faint">
+          <Link href="/pricing" className="text-sm font-medium text-ink-muted transition-colors hover:text-ink">
             Pricing
-            <span className="rounded border border-rule px-1 py-px text-[9px] uppercase tracking-wide">Soon</span>
-          </span>
-          <span className="flex items-center gap-1.5 text-sm font-medium text-ink-faint">
+          </Link>
+          <Link href="/about" className="text-sm font-medium text-ink-muted transition-colors hover:text-ink">
             About
-            <span className="rounded border border-rule px-1 py-px text-[9px] uppercase tracking-wide">Soon</span>
-          </span>
+          </Link>
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3">

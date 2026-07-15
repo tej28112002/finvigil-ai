@@ -57,6 +57,11 @@ Phase 17   Production Launch
 - The 12-tag psychology taxonomy in app/core/journal_taxonomy.py (fear, greed, fomo, revenge_trading, overconfidence, hesitation, impatience, discipline, patience, regret, anxiety, boredom) is this build's own reasonable default — the BRD names "Fixed psychology taxonomy" as a requirement but doesn't enumerate the actual tags. Easy to revise; every tag name is checked against this one list in JournalService.add_tags().
 - No AI-based auto-tag-suggestion or LLM coaching feedback was built — BRD's locked FR-JRN-01/02/03 text only requires transcription + fixed tagging + cascade delete; an older informal project doc mentioned "linked to trades" and AI coaching, but that's not in the locked BRD, so it wasn't built.
 
+## Marketing Pages (Pricing, About)
+- New `frontend/app/(marketing)/` route group with a shared layout (nav + footer), `pricing/page.tsx`, and `about/page.tsx`. Nav SOON badges removed — Pricing/About are real links now.
+- Bug found and fixed while building this: `frontend/proxy.ts` (middleware) only allowlisted "/" and "/login" as public routes — any other path, including the new /pricing and /about, redirected a logged-out visitor straight to /login. Fixed to allowlist all three marketing pages for logged-out access, while still bouncing a LOGGED-IN user away from "/" and "/login" only (not from /pricing or /about, since a logged-in user should still be able to view those).
+- `docs/todo.md` created — tracks deferred About-page sections (problem story, founder section, FAQ, etc.) and other cross-phase TODOs.
+
 ## Architecture Rules
 - flush() in repositories, never commit()
 - commit() only in get_db() in session.py

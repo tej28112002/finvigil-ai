@@ -34,16 +34,22 @@ export async function proxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isLoginRoute = pathname.startsWith("/login");
-  // "/" is the public marketing homepage (Stage 2C) — logged-out visitors
-  // must be able to reach it without being bounced to /login. Only /login
-  // and the app shell routes are session-gated.
-  const isPublicRoute = pathname === "/" || isLoginRoute;
+  // "/", /pricing, /about are the public marketing pages — logged-out
+  // visitors must be able to reach all of them without being bounced to
+  // /login. Only /login and these marketing pages are session-gated;
+  // everything else (the app shell) requires a session.
+  const isMarketingRoute =
+    pathname === "/" || pathname === "/pricing" || pathname === "/about";
+  const isPublicRoute = isMarketingRoute || isLoginRoute;
 
   if (!session && !isPublicRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (session && isPublicRoute) {
+  // Only bounce a LOGGED-IN user off "/" and "/login" to /dashboard — a
+  // logged-in user should still be able to view Pricing or About (e.g.
+  // to consider upgrading) without being forced back to the app shell.
+  if (session && (pathname === "/" || isLoginRoute)) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
