@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, MetricLabel } from "@/components/ui/card";
 import { Money } from "@/components/ui/money";
+import { UpgradePrompt } from "@/components/ui/upgrade-prompt";
 import { apiFetch, ApiError } from "@/lib/api";
 
 // ── types ────────────────────────────────────────────────────────────────────
@@ -95,10 +96,12 @@ export function MonteCarloClient() {
   const [cpiRate, setCpiRate] = useState("5");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsUpgrade, setNeedsUpgrade] = useState(false);
   const [result, setResult] = useState<MonteCarloRunResponse | null>(null);
 
   async function handleRun() {
     setError(null);
+    setNeedsUpgrade(false);
     setResult(null);
 
     const sv = parseFloat(startingValue);
@@ -127,7 +130,7 @@ export function MonteCarloClient() {
       setResult(run);
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
-        setError("Monte Carlo simulations require a Pro or Premium subscription. Please upgrade to access this feature.");
+        setNeedsUpgrade(true);
       } else {
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }
@@ -216,6 +219,12 @@ export function MonteCarloClient() {
             </p>
           </InputRow>
         </div>
+
+        {needsUpgrade && (
+          <div className="mt-4">
+            <UpgradePrompt feature="Monte Carlo simulations" />
+          </div>
+        )}
 
         {error && (
           <div className="mt-4 rounded-md border border-loss/30 bg-loss-soft px-4 py-2.5 text-sm text-loss">

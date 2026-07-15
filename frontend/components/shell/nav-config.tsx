@@ -204,6 +204,17 @@ export const NAV_GROUPS: NavGroup[] = [
         ),
       },
       {
+        label: "Billing",
+        href: "/billing",
+        description: "Manage your plan, upgrade, or cancel your subscription.",
+        icon: icon(
+          <>
+            <rect x="2" y="5" width="20" height="14" rx="2" />
+            <path d="M2 10h20" />
+          </>
+        ),
+      },
+      {
         label: "Settings",
         href: "/settings",
         description: "Profile, theme, and preferences.",
