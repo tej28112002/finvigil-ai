@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.admin_auth import get_current_admin_user_id
 from app.core.auth import get_current_user_id
 from app.db.session import get_db
 from app.repositories.itr_schema_repository import ItrSchemaRepository
@@ -13,11 +14,13 @@ from app.schemas.itr_schema import (
     ItrSchemaUploadRequest,
 )
 
-# NOTE: these endpoints only require authentication (get_current_user_id),
-# not an admin role — a real admin-role check is planned for Phase 14
-# (Admin Panel) and must be added before this is exposed beyond trusted
-# operators. Until then, any authenticated user can upload/activate ITR
-# schema mappings.
+# The two write endpoints (upload, activate/deactivate) require
+# is_admin = TRUE on user_tax_personas via get_current_admin_user_id — a
+# minimal role check, not the full RBAC model planned for Phase 14. Read
+# endpoints (GET) stay on plain get_current_user_id: read-only, lower risk,
+# and the frontend's ITR-3 download button on /tax needs GET
+# /admin/itr-schemas to know which AYs are available for every user, not
+# just admins.
 router = APIRouter()
 
 
@@ -36,7 +39,7 @@ def list_itr_schemas(
 @router.post("/admin/itr-schemas", response_model=ItrSchemaMappingDetailResponse)
 def upload_itr_schema(
     request: ItrSchemaUploadRequest,
-    user_id: UUID = Depends(get_current_user_id),
+    user_id: UUID = Depends(get_current_admin_user_id),
     repo: ItrSchemaRepository = Depends(get_itr_schema_repository),
 ):
     return repo.create_or_update(
@@ -68,7 +71,7 @@ def get_itr_schema(
 def set_itr_schema_active(
     ay: str,
     request: ItrSchemaActivateRequest,
-    user_id: UUID = Depends(get_current_user_id),
+    user_id: UUID = Depends(get_current_admin_user_id),
     repo: ItrSchemaRepository = Depends(get_itr_schema_repository),
 ):
     mapping = repo.set_active(ay=ay, is_active=request.is_active)

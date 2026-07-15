@@ -1,6 +1,6 @@
 # FinVigil AI — Project Status
 
-## Completed Phases (30/44 — 68%)
+## Completed Phases (32/45 — 71%)
 Phase 1    Architecture Design
 Phase 2    Database Schema
 Phase 2.5  Supabase Deployment
@@ -32,16 +32,17 @@ Phase 13 Stage 2A Design System
 Phase 13 Stage 2B All App Pages
 Phase 13 Stage 2C Marketing Homepage
 Phase 13 Stage 2D Polish Pass
+AIS        AIS Reconciliation (upload, parse, auto-match, resolve — FR-AIS-01 to 04)
+FR-AIS-05  Schema-driven ITR-3 JSON Export (Admin Panel schema upload, no-code annual update)
 
-## Remaining Phases (14/44 — 32%)
+## Remaining Phases (13/45 — 29%)
 Phase 10   Voice Journal Pipeline
 Phase 11.1 CA Export ZIP Bundle
 Phase 12   Celery + Redis + Razorpay
-Phase 14   Admin Panel
+Phase 14   Admin Panel (role-based access — currently /admin/itr-schemas has NO role check, any authenticated user can reach it)
 Phase 15   Testing + CA Validation
 Phase 16   Closed Beta
 Phase 17   Production Launch
-AIS        AIS Reconciliation (4 sub-phases)
 
 ## Architecture Rules
 - flush() in repositories, never commit()
