@@ -126,7 +126,6 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: "Replay",
         href: "/replay",
-        soon: true,
         description:
           "Rewind your portfolio to any past date and watch it evolve trade by trade.",
         icon: icon(
@@ -134,6 +133,18 @@ export const NAV_GROUPS: NavGroup[] = [
             <path d="M3 12a9 9 0 1 0 9-9" />
             <path d="M3 4v5h5" />
             <path d="M12 8v4l3 2" />
+          </>
+        ),
+      },
+      {
+        label: "Monte Carlo",
+        href: "/monte-carlo",
+        description:
+          "1 000-path simulation of how your portfolio might grow over time.",
+        icon: icon(
+          <>
+            <path d="M2 20h20" />
+            <path d="M5 20V9l4 4 3-8 4 6 4-8" />
           </>
         ),
       },
