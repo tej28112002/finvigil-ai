@@ -66,7 +66,7 @@ class MonteCarloService:
             user_id=user_id,
             replay_scenario_id=replay_scenario_id,
             parameters=parameters,
-            status="done",
+            status="completed",
             result_data=result_data,
         )
         return run
