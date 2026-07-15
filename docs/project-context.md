@@ -36,6 +36,7 @@ AIS        AIS Reconciliation (upload, parse, auto-match, resolve — FR-AIS-01 
 FR-AIS-05  Schema-driven ITR-3 JSON Export (Admin Panel schema upload, no-code annual update)
 Phase 11.1 CA Export ZIP Bundle (ITR-3 schedules + CSV + harvest data + README, in-memory zip)
 Phase 12a  Razorpay Billing (subscription model, webhook handler w/ HMAC verification, entitlement enforcement, grace period)
+Phase 12c  Razorpay real-credential integration (plan IDs, API keys, webhook secret configured; create/cancel/webhook all verified against Razorpay's real test-mode API — not just self-signed local tests)
 
 ## Remaining Phases (11/45 — 24%)
 Phase 10   Voice Journal Pipeline
@@ -45,10 +46,11 @@ Phase 15   Testing + CA Validation
 Phase 16   Closed Beta
 Phase 17   Production Launch
 
-## Known Billing Limitations (Phase 12a)
-- No razorpay_subscription_id column on `subscriptions` — webhook events are correlated to a FinVigil user via `notes.finvigil_user_id` set at subscription creation, not a stored Razorpay ID. Cancel-subscription only updates FinVigil's local row; does NOT call Razorpay's cancel API (nothing to call it with) — a real paid subscription keeps being charged by Razorpay until also canceled in their dashboard.
-- POST /billing/create-subscription and the webhook flow are untested against real Razorpay (no test-mode credentials exist yet — see backend/.env TODOs). Signature verification and the full webhook state-machine ARE tested locally (self-signed HMAC payloads).
-- RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET / RAZORPAY_WEBHOOK_SECRET / RAZORPAY_PLAN_* are empty placeholders in backend/.env.
+## Known Billing Limitations (Phase 12c)
+- `subscriptions.razorpay_subscription_id` (VARCHAR(255), indexed) now exists and is populated by create_subscription() and read by cancel_subscription() — verified end-to-end against Razorpay's real test API: create returned a real `sub_...` ID + `short_url` checkout link, and cancel actually called Razorpay (not just the local DB).
+- Webhook correlation is still via `notes.finvigil_user_id` (set at creation), not a `WHERE razorpay_subscription_id = ...` lookup — both would work now that the column exists; not changed since correctness doesn't depend on it and re-plumbing wasn't asked for.
+- RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET / RAZORPAY_WEBHOOK_SECRET / RAZORPAY_PLAN_PRO_MONTHLY / RAZORPAY_PLAN_PRO_ANNUAL / RAZORPAY_PLAN_PREMIUM_MONTHLY / RAZORPAY_PLAN_PREMIUM_ANNUAL are all set in backend/.env (test-mode). create-subscription, cancel-subscription, and the webhook signature+event flow were all verified against Razorpay's real test API, not just local self-signed tests.
+- Still open: no Celery job to proactively downgrade an expired-grace subscription (lazy/read-triggered only — see Phase 12b above); webhooks are correlated by notes, not the new ID column.
 
 ## Architecture Rules
 - flush() in repositories, never commit()

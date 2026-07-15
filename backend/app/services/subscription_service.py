@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from app.core import razorpay_client
 from app.models.subscription import Subscription
 from app.repositories.subscription_repository import SubscriptionRepository
 
@@ -123,19 +124,73 @@ class SubscriptionService:
             )
         return subscription
 
+    def create_subscription(self, user_id: UUID, finvigil_plan_id: str) -> dict:
+        """
+        Orchestrates Razorpay subscription creation end-to-end: resolves
+        FinVigil's plan_id to Razorpay's actual dashboard-created plan_id,
+        calls Razorpay's Create Subscription API, then immediately persists
+        the returned razorpay_subscription_id on this user's local row —
+        without that, a later webhook or cancel_subscription() call has
+        nothing to correlate/act on for this subscription.
+        """
+        if finvigil_plan_id not in PRO_PREMIUM_PLANS:
+            raise ValueError(
+                f"Invalid plan_id. Must be one of: {sorted(PRO_PREMIUM_PLANS)}"
+            )
+
+        razorpay_plan_id = razorpay_client.get_razorpay_plan_id(finvigil_plan_id)
+        if not razorpay_plan_id:
+            raise RuntimeError(
+                f"Razorpay plan mapping for '{finvigil_plan_id}' is not "
+                f"configured. An admin must create this plan in the "
+                f"Razorpay dashboard and set the matching RAZORPAY_PLAN_* "
+                f"variable in backend/.env."
+            )
+
+        razorpay_subscription = razorpay_client.create_subscription(
+            razorpay_plan_id=razorpay_plan_id,
+            notes={
+                "finvigil_user_id": str(user_id),
+                "finvigil_plan_id": finvigil_plan_id,
+            },
+        )
+
+        subscription = self.get_or_create_subscription(user_id)
+        self.subscription_repository.update_status(
+            subscription,
+            razorpay_subscription_id=razorpay_subscription["id"],
+        )
+
+        return {
+            "razorpay_subscription_id": razorpay_subscription["id"],
+            "checkout_url": razorpay_subscription.get("short_url"),
+        }
+
     def cancel_subscription(self, user_id: UUID) -> Subscription:
         """
         User-initiated cancellation (billing page "Cancel subscription").
-        LIMITATION: this only updates FinVigil's own record. The live
-        `subscriptions` table has no razorpay_subscription_id column, so
-        there is nothing to call Razorpay's Cancel Subscription API with —
-        a real paid Razorpay subscription created via
-        POST /billing/create-subscription is NOT actually stopped by this
-        call and will continue to be charged until also canceled in the
-        Razorpay dashboard, or until a razorpay_subscription_id column is
-        added and this method is extended to call Razorpay directly.
+        If a razorpay_subscription_id is on record, also calls Razorpay's
+        Cancel Subscription API — but the LOCAL DB is always updated to
+        status='canceled' regardless of whether that call succeeds, so
+        FinVigil's own access control never depends on Razorpay's API
+        being reachable at that moment. A subscription with no
+        razorpay_subscription_id on record (e.g. never went through
+        create_subscription(), or predates that correlation being stored)
+        only has its local record changed — nothing exists to tell
+        Razorpay to stop billing, so that would need to be done manually
+        in the Razorpay dashboard.
         """
         subscription = self.get_or_create_subscription(user_id)
+
+        if subscription.razorpay_subscription_id:
+            try:
+                razorpay_client.cancel_subscription(subscription.razorpay_subscription_id)
+            except Exception:
+                # Local cancellation intent must still be honored even if
+                # Razorpay is unreachable or errors — never leave a user
+                # stuck paying because of a transient API failure.
+                pass
+
         return self.subscription_repository.update_status(
             subscription, status="canceled", is_active=False
         )

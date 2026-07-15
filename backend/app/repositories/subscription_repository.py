@@ -33,6 +33,7 @@ class SubscriptionRepository(BaseRepository[Subscription]):
         status: str | None = None,
         current_period_end: datetime | None = None,
         is_active: bool | None = None,
+        razorpay_subscription_id: str | None = None,
     ) -> Subscription:
         """Partial update — only fields explicitly passed are changed."""
         if plan_id is not None:
@@ -43,6 +44,8 @@ class SubscriptionRepository(BaseRepository[Subscription]):
             subscription.current_period_end = current_period_end
         if is_active is not None:
             subscription.is_active = is_active
+        if razorpay_subscription_id is not None:
+            subscription.razorpay_subscription_id = razorpay_subscription_id
         self.db.flush()
         self.db.refresh(subscription)
         return subscription

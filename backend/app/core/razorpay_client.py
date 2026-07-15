@@ -9,10 +9,7 @@ _RAZORPAY_API_BASE = "https://api.razorpay.com/v1"
 
 # FinVigil's own plan_id enum -> the actual Razorpay plan_id created in the
 # Razorpay dashboard (Subscriptions > Plans). These are NOT the same string
-# — Razorpay assigns its own plan_xxxxx IDs. No plans exist yet (no
-# Razorpay account has been set up for this project), so every value below
-# is an empty placeholder until an admin creates the 4 plans and pastes
-# their IDs into backend/.env.
+# — Razorpay assigns its own plan_xxxxx IDs, configured in backend/.env.
 _PLAN_ID_MAP = {
     "pro_monthly": settings.RAZORPAY_PLAN_PRO_MONTHLY,
     "pro_annual": settings.RAZORPAY_PLAN_PRO_ANNUAL,
@@ -71,6 +68,30 @@ def create_subscription(razorpay_plan_id: str, notes: dict, total_count: int = 1
             "total_count": total_count,
             "notes": notes,
         },
+        timeout=10,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def cancel_subscription(razorpay_subscription_id: str) -> dict:
+    """
+    Calls Razorpay's Cancel Subscription API. Razorpay's real endpoint is
+    POST /v1/subscriptions/{id}/cancel (not DELETE — cancellation is an
+    action on the subscription resource, not a resource deletion; a DELETE
+    verb here would just 405 against the real API).
+    cancel_at_cycle_end=0 means cancel immediately, not at the end of the
+    current billing cycle.
+    """
+    if not is_configured():
+        raise RuntimeError(
+            "Razorpay is not configured. Set RAZORPAY_KEY_ID and "
+            "RAZORPAY_KEY_SECRET in backend/.env before canceling subscriptions."
+        )
+    response = requests.post(
+        f"{_RAZORPAY_API_BASE}/subscriptions/{razorpay_subscription_id}/cancel",
+        auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET),
+        json={"cancel_at_cycle_end": 0},
         timeout=10,
     )
     response.raise_for_status()

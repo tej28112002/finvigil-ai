@@ -13,7 +13,7 @@ from app.schemas.billing import (
     CreateSubscriptionResponse,
     SubscriptionResponse,
 )
-from app.services.subscription_service import PRO_PREMIUM_PLANS, SubscriptionService
+from app.services.subscription_service import SubscriptionService
 
 router = APIRouter()
 
@@ -46,42 +46,20 @@ def get_subscription(
 def create_subscription(
     request: CreateSubscriptionRequest,
     user_id: UUID = Depends(get_current_user_id),
+    service: SubscriptionService = Depends(get_subscription_service),
 ):
-    if request.plan_id not in PRO_PREMIUM_PLANS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid plan_id. Must be one of: {sorted(PRO_PREMIUM_PLANS)}",
-        )
-
-    razorpay_plan_id = razorpay_client.get_razorpay_plan_id(request.plan_id)
-    if not razorpay_plan_id:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                f"Razorpay plan mapping for '{request.plan_id}' is not "
-                f"configured yet. An admin must create this plan in the "
-                f"Razorpay dashboard and set the matching RAZORPAY_PLAN_* "
-                f"variable in backend/.env."
-            ),
-        )
-
     try:
-        razorpay_subscription = razorpay_client.create_subscription(
-            razorpay_plan_id=razorpay_plan_id,
-            notes={
-                "finvigil_user_id": str(user_id),
-                "finvigil_plan_id": request.plan_id,
-            },
+        result = service.create_subscription(
+            user_id=user_id, finvigil_plan_id=request.plan_id
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Razorpay request failed: {e}")
 
-    return CreateSubscriptionResponse(
-        razorpay_subscription_id=razorpay_subscription["id"],
-        checkout_url=razorpay_subscription.get("short_url"),
-    )
+    return CreateSubscriptionResponse(**result)
 
 
 @router.post("/billing/cancel-subscription", response_model=SubscriptionResponse)
@@ -89,9 +67,9 @@ def cancel_subscription(
     user_id: UUID = Depends(get_current_user_id),
     service: SubscriptionService = Depends(get_subscription_service),
 ):
-    # LIMITATION: only updates FinVigil's own record — see
-    # SubscriptionService.cancel_subscription's docstring. Does not call
-    # Razorpay's cancel API (no razorpay_subscription_id is persisted).
+    # Calls Razorpay's cancel API when a razorpay_subscription_id is on
+    # record; local status always moves to 'canceled' regardless of that
+    # call's outcome — see SubscriptionService.cancel_subscription.
     subscription = service.cancel_subscription(user_id)
     entitlement = service.compute_effective_entitlement(subscription)
     return SubscriptionResponse(

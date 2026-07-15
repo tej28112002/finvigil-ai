@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import TIMESTAMP, Boolean, ForeignKey
+from sqlalchemy import TIMESTAMP, Boolean, ForeignKey, String
 from sqlalchemy.dialects.postgresql import ENUM, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -54,4 +54,9 @@ class Subscription(UUIDMixin, TimestampMixin, Base):
     current_period_end: Mapped[datetime | None] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=True,
+    )
+    razorpay_subscription_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
     )
