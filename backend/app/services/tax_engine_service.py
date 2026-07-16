@@ -50,18 +50,30 @@ class TaxEngineService:
         ltcg_tax_rate = Decimal("0.125")
         ltcg_exemption = Decimal("125000")
 
-        # STEP 5 — Net STCG/LTCG against each other (set-off),
-        # then apply LTCG exemption
+        # STEP 5 — Net STCG/LTCG against each other (set-off per Section 70
+        # of the Income Tax Act), then apply LTCG exemption.
+        #
+        # Section 70 is asymmetric, not two mirror cases: a short-term
+        # capital loss may be set off against EITHER a short-term or a
+        # long-term gain, but a long-term capital loss may ONLY be set off
+        # against a long-term gain — never against a short-term gain. A
+        # prior version of this branch incorrectly let an LTCG loss offset
+        # an STCG gain (treating it as symmetric with the STCG-loss case
+        # below), which understated STCG tax liability whenever a user had
+        # an unrelated LTCG loss. Caught by
+        # tests/test_setoff_logic.py::test_ltcg_loss_must_not_offset_stcg_gain_section_70.
         if total_stcg < Decimal("0") and total_ltcg > Decimal("0"):
-            # STCG loss offsets LTCG gain
+            # STCG loss offsets LTCG gain — the one direction Section 70
+            # actually permits between the two types.
             net_ltcg = total_ltcg + total_stcg
             net_stcg = Decimal("0")
-        elif total_ltcg < Decimal("0") and total_stcg > Decimal("0"):
-            # LTCG loss offsets STCG gain
-            net_stcg = total_stcg + total_ltcg
-            net_ltcg = Decimal("0")
         else:
-            # Same sign or one/both zero — no offsetting applicable
+            # Everything else falls through unmodified: same sign, either
+            # figure zero, or an LTCG loss alongside an STCG gain — which
+            # Section 70 forbids from offsetting, so the STCG gain stays
+            # fully taxable and the LTCG loss simply earns no set-off this
+            # year (in reality it would carry forward up to 8 years, not
+            # modeled by this engine).
             net_stcg = total_stcg
             net_ltcg = total_ltcg
 
