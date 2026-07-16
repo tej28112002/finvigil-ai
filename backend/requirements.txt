@@ -27,12 +27,14 @@ httpx==0.28.1  # test-only: required by fastapi.testclient.TestClient (tests/tes
 hyperlink==21.0.0
 idna==3.18
 Incremental==24.11.0
+iniconfig==2.3.0
 kiteconnect==5.2.0
 kombu==5.6.2
 numpy==2.4.6
 openpyxl==3.1.5
 packaging==26.2
 pandas==3.0.3
+pluggy==1.6.0
 prompt_toolkit==3.0.52
 psycopg2-binary==2.9.12
 pycparser==3.0
@@ -40,6 +42,7 @@ pydantic==2.13.4
 pydantic_core==2.46.4
 PyJWT==2.13.0
 pyOpenSSL==26.3.0
+pytest==9.1.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 python-multipart==0.0.32
