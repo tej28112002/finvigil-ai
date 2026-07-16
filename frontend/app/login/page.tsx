@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
 import { FloatingCardsScene } from "@/components/brand/floating-cards-scene";
 import { Button } from "@/components/ui/button";
@@ -13,13 +13,39 @@ const GOOGLE_LOGIN_ENABLED =
 type Mode = "signin" | "forgot" | "forgot-sent";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleNotice, setGoogleNotice] = useState(false);
+
+  // /auth/callback redirects here with ?error=<code> when the OAuth flow
+  // fails (e.g. the user cancelled on Google's consent screen). Map the
+  // code to calm copy and strip it from the URL so a refresh doesn't
+  // re-show a stale error.
+  useEffect(() => {
+    const callbackError = searchParams.get("error");
+    if (callbackError === "access_denied") {
+      setError("Sign-in was canceled.");
+      router.replace("/login");
+    } else if (callbackError) {
+      setError(
+        "Google sign-in failed. Please try again, or use your email and password below."
+      );
+      router.replace("/login");
+    }
+  }, [searchParams, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,7 +97,7 @@ export default function LoginPage() {
     const supabase = createClient();
     supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/dashboard` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
   }
 

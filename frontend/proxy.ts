@@ -40,7 +40,11 @@ export async function proxy(request: NextRequest) {
   // everything else (the app shell) requires a session.
   const isMarketingRoute =
     pathname === "/" || pathname === "/pricing" || pathname === "/about";
-  const isPublicRoute = isMarketingRoute || isLoginRoute;
+  // The OAuth provider redirects here before a session cookie exists — the
+  // route handler is what creates the session (or reports the failure), so
+  // it must run unauthenticated rather than get bounced to /login first.
+  const isAuthCallbackRoute = pathname.startsWith("/auth/callback");
+  const isPublicRoute = isMarketingRoute || isLoginRoute || isAuthCallbackRoute;
 
   if (!session && !isPublicRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
