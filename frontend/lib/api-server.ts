@@ -1,6 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL!;
+// Deliberately NOT NEXT_PUBLIC_API_URL. That prefix makes Next.js inline the
+// value as a literal string at BUILD TIME wherever it's referenced in
+// source — including here, even though this file only ever runs
+// server-side. A production incident traced to exactly this: the deployed
+// build had baked in the local-dev value (127.0.0.1:8000), and there was
+// no way to fix it short of a full rebuild. BACKEND_API_URL (no prefix) is
+// read from real process.env at actual request time, so correcting it in
+// Vercel just needs a redeploy, not a rebuild with the right value present
+// at compile time. lib/api.ts (the client-side counterpart) still needs
+// NEXT_PUBLIC_API_URL — the browser has no other way to learn this value.
+const API_URL = process.env.BACKEND_API_URL!;
 
 /**
  * Thrown by apiFetchServer() for any real backend failure (401/403/500/etc,
