@@ -69,7 +69,15 @@ Phase 17   Production Launch
 - Bug found and fixed while building this: `frontend/proxy.ts` (middleware) only allowlisted "/" and "/login" as public routes — any other path, including the new /pricing and /about, redirected a logged-out visitor straight to /login. Fixed to allowlist all three marketing pages for logged-out access, while still bouncing a LOGGED-IN user away from "/" and "/login" only (not from /pricing or /about, since a logged-in user should still be able to view those).
 - `docs/todo.md` created — tracks deferred About-page sections (problem story, founder section, FAQ, etc.) and other cross-phase TODOs.
 
+## Google OAuth Sign-In
+- `frontend/app/auth/callback/route.ts` added — exchanges the PKCE `code` for a session via the server Supabase client, redirects to `/dashboard` on success. Handles provider failure via the `?error=<code>` query param GoTrue forwards on this redirect (not a guessed param name — this is GoTrue's documented server-side redirect behavior): `access_denied` when the user cancels on Google's consent screen (Google returns this per RFC 6749), `oauth_failed` for anything else (missing/malformed code, exchange throws, expired code).
+- `frontend/app/login/page.tsx` — Google button's `redirectTo` now points at `/auth/callback` (was `/dashboard`, which skipped the code exchange entirely and never set a session cookie). Reads `?error=` on mount, shows "Sign-in was canceled." for `access_denied` or a generic retry message otherwise through the existing `role="alert"` error slot, then strips the param via `router.replace` so a refresh doesn't re-show a stale error.
+- Bug found and fixed while building this: `frontend/proxy.ts` didn't allowlist `/auth/callback` as a public route, so the OAuth provider's unauthenticated redirect (carrying `code`/`error`) got bounced straight to `/login` before the route handler could ever run — added to the public-route list alongside `/`, `/pricing`, `/about`, `/login`.
+- `NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED=true` set in `frontend/.env.local`.
+- Tested live end-to-end: button → Google consent → callback → session cookie set → `/dashboard`, and the cancel path → `/login` showing "Sign-in was canceled."
+
 ## Architecture Rules
+- Always run `npm run dev` from the main repo folder (`frontend/`), never a `.claude\worktrees\*` folder — those are temporary per-task checkouts and don't persist.
 - flush() in repositories, never commit()
 - commit() only in get_db() in session.py
 - Decimal(str()) for all money math
