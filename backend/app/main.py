@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1 import health, broker, trade, holding, dashboard, portfolio, realized_gain, tax, tax_export, corporate_action, csv_import, zerodha, fno_pnl, reconstruction, crypto, harvesting, replay, monte_carlo, ais, admin_itr, billing, journal, admin
+from app.core.config import settings
 
 logger = logging.getLogger("finvigil")
 
@@ -35,7 +36,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # (Phase 11.2) verifies it on every protected route.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

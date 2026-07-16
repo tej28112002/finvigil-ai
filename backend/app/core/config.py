@@ -34,6 +34,18 @@ class Settings:
     # against kombu's source, not assumed).
     REDIS_URL: str = os.environ.get("REDIS_URL", "")
 
+    # Lightweight-deploy CORS allowlist. Defaults to local dev only, so
+    # nothing changes for existing local setups unless this is explicitly
+    # set. Comma-separated, no spaces — e.g.
+    # "https://finvigil.vercel.app,https://finvigil-git-main.vercel.app"
+    ALLOWED_ORIGINS: list[str] = [
+        origin.strip()
+        for origin in os.environ.get(
+            "ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+        ).split(",")
+        if origin.strip()
+    ]
+
 
 settings = Settings()
 
