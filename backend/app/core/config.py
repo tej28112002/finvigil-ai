@@ -28,6 +28,12 @@ class Settings:
     # until an admin pastes a real key from console.groq.com.
     GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
 
+    # Phase 12b — Celery broker/result backend. Upstash requires TLS, so
+    # this MUST be rediss:// not redis:// (kombu's Redis transport only
+    # switches to redis.SSLConnection on the "rediss" scheme — verified
+    # against kombu's source, not assumed).
+    REDIS_URL: str = os.environ.get("REDIS_URL", "")
+
 
 settings = Settings()
 

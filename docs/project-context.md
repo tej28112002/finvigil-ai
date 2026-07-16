@@ -1,6 +1,6 @@
 # FinVigil AI — Project Status
 
-## Completed Phases (36/45 — 80%)
+## Completed Phases (37/45 — 82%)
 Phase 1    Architecture Design
 Phase 2    Database Schema
 Phase 2.5  Supabase Deployment
@@ -39,9 +39,9 @@ Phase 12a  Razorpay Billing (subscription model, webhook handler w/ HMAC verific
 Phase 12c  Razorpay real-credential integration (plan IDs, API keys, webhook secret configured; create/cancel/webhook all verified against Razorpay's real test-mode API — not just self-signed local tests)
 Phase 10   Voice Journal Pipeline (Groq Whisper STT, fixed psychology taxonomy, text-entry fallback, cascade delete — FR-JRN-01 to 03)
 Phase 14   Admin Panel (role-based access: user/support/admin; user management; feature flags; scoped read-only impersonation + broker resync; full audit log — FR-ADM-01/02)
+Phase 12b  Celery + Redis (proactive grace-period downgrade + FR-HAR-03's daily 06:00 IST harvest job — see below)
 
-## Remaining Phases (9/45 — 20%)
-Phase 12b  Celery + Redis (no scheduled jobs exist yet — grace-period downgrade is lazy/read-triggered via GET /billing/subscription, not proactive; also blocks FR-HAR-03's daily 06:00 IST harvest job)
+## Remaining Phases (8/45 — 18%)
 Phase 15   Testing + CA Validation
 Phase 16   Closed Beta
 Phase 17   Production Launch
@@ -50,7 +50,7 @@ Phase 17   Production Launch
 - `subscriptions.razorpay_subscription_id` (VARCHAR(255), indexed) now exists and is populated by create_subscription() and read by cancel_subscription() — verified end-to-end against Razorpay's real test API: create returned a real `sub_...` ID + `short_url` checkout link, and cancel actually called Razorpay (not just the local DB).
 - Webhook correlation is still via `notes.finvigil_user_id` (set at creation), not a `WHERE razorpay_subscription_id = ...` lookup — both would work now that the column exists; not changed since correctness doesn't depend on it and re-plumbing wasn't asked for.
 - RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET / RAZORPAY_WEBHOOK_SECRET / RAZORPAY_PLAN_PRO_MONTHLY / RAZORPAY_PLAN_PRO_ANNUAL / RAZORPAY_PLAN_PREMIUM_MONTHLY / RAZORPAY_PLAN_PREMIUM_ANNUAL are all set in backend/.env (test-mode). create-subscription, cancel-subscription, and the webhook signature+event flow were all verified against Razorpay's real test API, not just local self-signed tests.
-- Still open: no Celery job to proactively downgrade an expired-grace subscription (lazy/read-triggered only — see Phase 12b above); webhooks are correlated by notes, not the new ID column.
+- Proactive grace-period downgrade now exists (Phase 12b, below) — the lazy/read-triggered path via GET /billing/subscription is unchanged and still runs too, both call the same SubscriptionService.reconcile_expired_grace(). Webhooks are still correlated by notes, not the new ID column (unchanged from Phase 12c).
 
 ## Known Journal Limitations (Phase 10)
 - GROQ_API_KEY is now set in backend/.env and POST /journal/entries/audio was verified against Groq's REAL Whisper API — a synthesized speech WAV file was transcribed and the returned text matched the source audio exactly, word for word. The text-entry path (POST /journal/entries/text) was also fully tested (create, tag, list, ownership isolation, cascade delete).
@@ -69,6 +69,17 @@ Phase 17   Production Launch
 - Bug found and fixed while building this: `frontend/proxy.ts` (middleware) only allowlisted "/" and "/login" as public routes — any other path, including the new /pricing and /about, redirected a logged-out visitor straight to /login. Fixed to allowlist all three marketing pages for logged-out access, while still bouncing a LOGGED-IN user away from "/" and "/login" only (not from /pricing or /about, since a logged-in user should still be able to view those).
 - `docs/todo.md` created — tracks deferred About-page sections (problem story, founder section, FAQ, etc.) and other cross-phase TODOs.
 
+## Phase 12b — Celery + Redis
+- Broker/backend: Upstash Redis over TLS. `REDIS_URL` in `backend/.env` MUST use `rediss://` not `redis://` — verified directly against kombu's source (the library Celery's Redis transport is built on): `rediss://` is what switches kombu to `redis.SSLConnection`, `redis://` stays on a plain unencrypted connection. Confirmed live: PING, SET/GET round-trip, and explicit `connection_class` introspection all passed against the real Upstash instance.
+- `backend/app/core/celery_app.py` — `celery_app.conf.timezone = "Asia/Kolkata"`. Verified against Celery's own `schedules.py` source that crontab's `now()` resolves through `app.timezone`, so `crontab(hour=6, minute=0)` genuinely fires at 06:00 IST wall-clock, not 06:00 UTC — no manual UTC-offset math needed in the schedule itself.
+- **Job 1 — proactive grace downgrade** (`app/tasks/grace_period_tasks.py`, hourly): reuses `SubscriptionService.reconcile_expired_grace()` as-is — no state-machine logic duplicated. New `SubscriptionRepository.list_grace_eligible()` narrows the scan to `status IN ('past_due', 'grace')` rather than every subscription row. Not wired to any notification (Day 0/3/6 grace emails, BRD §10) — FR-NOT-* doesn't exist yet in this project.
+- **Job 2 — daily 06:00 IST harvest scan** (`app/tasks/harvest_tasks.py`, FR-HAR-03): discovered `harvest_runs` / `harvest_recommendation_lines` tables already existed in `db/schema.sql` (BRD §14's data model) and were already deployed live on Supabase, but nothing in app code had ever touched them — `HarvestingService` was, and remains, pure compute-on-demand with no persistence. Built `app/models/harvest_run.py`, `harvest_recommendation_line.py`, `app/repositories/harvest_run_repository.py`, and `app/services/harvest_cache_service.py` (`HarvestCacheService`) to read/write those existing tables — no migration needed, the schema was already there.
+  - `harvest_recommendation_lines` deliberately doesn't duplicate symbol/buy_price/buy_date — those are read back through the `holding_lot_id` FK at query time. `current_value` is reconstructed by exact arithmetic (`buy_price * qty + stored simulated_stcg_ltcg`), not a fresh live-price fetch, so a cache hit costs zero calls to `PriceService`. `is_price_estimate` is always `False` for a persisted row by construction: `HarvestingService` only ever includes a lot when `unrealized_loss < 0`, and its own cost-basis fallback can never itself produce a loss.
+  - Tier-aware in `app/api/v1/harvesting.py`: Free tier is untouched, still calls `HarvestingService` directly, always live, never caches (FR-HAR-03: "Free on-demand only"). Pro/Premium reads through `HarvestCacheService`, which serves a completed run created since the most recent 06:00 IST boundary, or computes live and persists on a cache miss (first-ever call before the daily job has run, or a prior failed run) — so the 60s-polling requirement in FR-HAR-03 doesn't re-run a full FIFO+live-price scan every poll.
+  - "Portfolio-change" as a third refresh trigger (also named in FR-HAR-03, alongside the daily job and 60s polling) was NOT built this phase — only the scheduled daily scan and the cache-miss fallback exist as refresh paths.
+- `requirements.txt` gained `celery==5.6.3`, `redis==8.0.1`, and their transitive dependencies.
+- **Not started**: no `celery worker` / `celery beat` process has been run — deliberately left for the user to test separately before it goes anywhere near production. All verification so far calls the service layer directly (`HarvestCacheService`, `SubscriptionService`) against the real DB using the project's documented test user, never the actual `@celery_app.task`-decorated functions — those iterate every matching row in the database, not a single scoped case, so they're intentionally excluded from this project's testing process now.
+
 ## Google OAuth Sign-In
 - `frontend/app/auth/callback/route.ts` added — exchanges the PKCE `code` for a session via the server Supabase client, redirects to `/dashboard` on success. Handles provider failure via the `?error=<code>` query param GoTrue forwards on this redirect (not a guessed param name — this is GoTrue's documented server-side redirect behavior): `access_denied` when the user cancels on Google's consent screen (Google returns this per RFC 6749), `oauth_failed` for anything else (missing/malformed code, exchange throws, expired code).
 - `frontend/app/login/page.tsx` — Google button's `redirectTo` now points at `/auth/callback` (was `/dashboard`, which skipped the code exchange entirely and never set a session cookie). Reads `?error=` on mount, shows "Sign-in was canceled." for `access_denied` or a generic retry message otherwise through the existing `role="alert"` error slot, then strips the param via `router.replace` so a refresh doesn't re-show a stale error.
@@ -78,6 +89,7 @@ Phase 17   Production Launch
 
 ## Architecture Rules
 - Always run `npm run dev` from the main repo folder (`frontend/`), never a `.claude\worktrees\*` folder — those are temporary per-task checkouts and don't persist.
+- Never execute a Celery `@celery_app.task`-decorated function during testing/verification, even by calling it directly in-process (no broker/worker needed to do this, which makes it easy to do by accident) — those functions iterate every matching row in the real database, not a scoped test case. Test the underlying service/business logic directly instead (e.g. call `HarvestCacheService`/`SubscriptionService` methods against one known test user), the same way the connection and cache-hit/miss behavior were verified in Phase 12b.
 - flush() in repositories, never commit()
 - commit() only in get_db() in session.py
 - Decimal(str()) for all money math

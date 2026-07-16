@@ -21,6 +21,23 @@ class SubscriptionRepository(BaseRepository[Subscription]):
     def get_all(self) -> list[Subscription]:
         return self.db.query(Subscription).all()
 
+    def list_grace_eligible(self) -> list[Subscription]:
+        """
+        Subscriptions whose grace window could plausibly need reconciling
+        — status in ('past_due', 'grace'), matching
+        SubscriptionService._GRACE_ELIGIBLE_STATUSES. Deliberately doesn't
+        also filter on plan_id/current_period_end here: that datetime math
+        already lives in SubscriptionService.compute_effective_entitlement,
+        and duplicating it in SQL would risk the two definitions drifting
+        apart. This is just a cheap pre-filter so the proactive-downgrade
+        task isn't scanning every 'active'/'free'/'canceled' row too.
+        """
+        return (
+            self.db.query(Subscription)
+            .filter(Subscription.status.in_(("past_due", "grace")))
+            .all()
+        )
+
     def create_default_free(self, user_id: uuid.UUID) -> Subscription:
         return self.create(
             user_id=user_id,
