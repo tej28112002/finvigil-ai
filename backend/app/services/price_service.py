@@ -4,7 +4,6 @@ from uuid import UUID
 
 from kiteconnect import KiteConnect
 
-from app.core.config import settings
 from app.repositories.broker_connection_repository import BrokerConnectionRepository
 from app.repositories.vault_repository import VaultRepository
 
@@ -24,22 +23,28 @@ class PriceService:
         self.broker_connection_repository = broker_connection_repository
         self.vault_repository = vault_repository
 
-    def _get_access_token(self, user_id: UUID) -> str | None:
+    def _get_connection_and_access_token(
+        self, user_id: UUID
+    ) -> tuple[str, str] | None:
         """
-        Retrieve the Zerodha access token from Vault.
-        Returns None (silently) if no active connection or no token stored.
+        Retrieve the user's own Zerodha api_key plus their access token from
+        Vault. Returns None (silently) if no active connection, no api_key
+        (BYOK credentials never submitted), or no token stored.
         """
         connection = self.broker_connection_repository.get_by_user_and_broker(
             user_id=user_id,
             broker_name="zerodha",
         )
-        if not connection or not connection.credentials_kms_id:
+        if not connection or not connection.api_key or not connection.access_token_kms_id:
             return None
         if connection.status != "active":
             return None
-        return self.vault_repository.get_secret(
-            secret_id=UUID(connection.credentials_kms_id),
+        token = self.vault_repository.get_secret(
+            secret_id=UUID(connection.access_token_kms_id),
         )
+        if not token:
+            return None
+        return connection.api_key, token
 
     def get_prices(
         self,
@@ -82,20 +87,22 @@ class PriceService:
         if not stale_symbols:
             return result
 
-        # Step 2 — get Zerodha access token; silent fallback if unavailable
+        # Step 2 — get the user's own Zerodha api_key + access token;
+        # silent fallback if unavailable
         try:
-            access_token = self._get_access_token(user_id=user_id)
+            credentials = self._get_connection_and_access_token(user_id=user_id)
         except Exception:
             return result
 
-        if not access_token:
+        if not credentials:
             return result
+        api_key, access_token = credentials
 
         # Step 3 — ONE batched kite.quote() call for all stale symbols
         instrument_keys = [f"NSE:{symbol}" for symbol in stale_symbols]
 
         try:
-            kite = KiteConnect(api_key=settings.ZERODHA_API_KEY)
+            kite = KiteConnect(api_key=api_key)
             kite.set_access_token(access_token)
             quotes = kite.quote(instrument_keys)
         except Exception:

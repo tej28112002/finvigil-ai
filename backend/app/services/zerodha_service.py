@@ -1,11 +1,12 @@
 from datetime import datetime
 from decimal import Decimal
+from urllib.parse import quote
 from uuid import UUID
 
 from kiteconnect import KiteConnect
 
-from app.core.config import settings
 from app.core.idempotency import generate_trade_idempotency_hash
+from app.core.oauth_state import sign_state, verify_state
 from app.models.broker_connection import BrokerConnection
 from app.repositories.broker_connection_repository import (
     BrokerConnectionRepository,
@@ -14,6 +15,13 @@ from app.repositories.instrument_repository import InstrumentRepository
 from app.repositories.vault_repository import VaultRepository
 from app.schemas.csv_import import CsvImportResponse
 from app.services.trade_service import TradeService
+
+# Kite Connect's own login_url() (pykiteconnect) doesn't expose a way to
+# pass redirect_params, so the URL is built manually here. Endpoint + version
+# per Zerodha's public docs (kite.trade/docs/connect/v3/user/), not an
+# internal SDK attribute.
+_KITE_LOGIN_URL = "https://kite.zerodha.com/connect/login"
+_KITE_API_VERSION = "3"
 
 
 class ZerodhaService:
@@ -33,44 +41,73 @@ class ZerodhaService:
         self,
         user_id: UUID,
     ) -> str:
-        # Step 1 — Ensure broker_connection exists
+        """
+        BYOK: uses the user's own Kite Connect api_key, submitted beforehand
+        via POST /brokers/zerodha/credentials. Does NOT auto-create a
+        broker_connection -- one must already exist with credentials on it.
+
+        Zerodha's redirect back to our callback can't carry an Authorization
+        header, so instead of trusting a bare user_id query param (the prior
+        approach, documented tech debt), a signed state token is embedded via
+        Kite's redirect_params mechanism and verified in handle_callback().
+        """
         connection = self.broker_connection_repository.get_by_user_and_broker(
             user_id=user_id,
             broker_name="zerodha",
         )
-        if not connection:
-            connection = self.broker_connection_repository.create_connection(
-                user_id=user_id,
-                broker_name="zerodha",
-                credentials_kms_id=None,
+        if not connection or not connection.api_key:
+            raise ValueError(
+                "No Zerodha API key on file. Submit your Kite Connect "
+                "api_key and api_secret via POST /brokers/zerodha/credentials "
+                "before connecting."
             )
 
-        # Step 2 — Generate and return login URL
-        kite = KiteConnect(api_key=settings.ZERODHA_API_KEY)
-        return kite.login_url()
+        state = sign_state(user_id)
+        redirect_params = quote(f"state={state}", safe="")
+        return (
+            f"{_KITE_LOGIN_URL}?v={_KITE_API_VERSION}"
+            f"&api_key={connection.api_key}"
+            f"&redirect_params={redirect_params}"
+        )
 
     def handle_callback(
         self,
-        user_id: UUID,
+        state: str,
         request_token: str,
     ) -> BrokerConnection:
-        # Step 1 — Fetch existing broker connection
+        try:
+            user_id = verify_state(state)
+        except ValueError as e:
+            raise ValueError(f"Invalid or expired login session: {e}")
+
+        # Step 1 — Fetch existing broker connection (must already have
+        # credentials submitted -- see get_login_url).
         connection = self.broker_connection_repository.get_by_user_and_broker(
             user_id=user_id,
             broker_name="zerodha",
         )
-        if not connection:
+        if not connection or not connection.api_key or not connection.api_secret_kms_id:
             raise ValueError(
-                "No Zerodha connection found. "
-                "Call GET /brokers/zerodha/login first."
+                "No Zerodha credentials found. Submit your api_key/api_secret "
+                "via POST /brokers/zerodha/credentials, then call "
+                "GET /brokers/zerodha/login."
+            )
+
+        api_secret = self.vault_repository.get_secret(
+            secret_id=UUID(connection.api_secret_kms_id),
+        )
+        if not api_secret:
+            raise ValueError(
+                "Zerodha API secret not found in Vault. Please re-submit "
+                "your credentials."
             )
 
         # Step 2 — Exchange request_token for access_token
         try:
-            kite = KiteConnect(api_key=settings.ZERODHA_API_KEY)
+            kite = KiteConnect(api_key=connection.api_key)
             data = kite.generate_session(
                 request_token,
-                api_secret=settings.ZERODHA_API_SECRET,
+                api_secret=api_secret,
             )
             access_token = data["access_token"]
         except Exception as e:
@@ -78,11 +115,11 @@ class ZerodhaService:
                 f"Failed to exchange request token: {str(e)}"
             )
 
-        # Step 3 — Store in Vault (create or update)
+        # Step 3 — Store access token in Vault (create or update)
         vault_name = f"zerodha_token_{user_id}"
-        if connection.credentials_kms_id:
+        if connection.access_token_kms_id:
             self.vault_repository.update_secret(
-                secret_id=UUID(connection.credentials_kms_id),
+                secret_id=UUID(connection.access_token_kms_id),
                 secret_value=access_token,
                 name=vault_name,
                 description="Zerodha daily access token",
@@ -93,9 +130,9 @@ class ZerodhaService:
                 name=vault_name,
                 description="Zerodha daily access token",
             )
-            self.broker_connection_repository.update_credentials_kms_id(
+            self.broker_connection_repository.update_access_token_kms_id(
                 connection=connection,
-                credentials_kms_id=str(secret_id),
+                access_token_kms_id=str(secret_id),
             )
 
         # Step 4 — Ensure status is active and return
@@ -118,13 +155,13 @@ class ZerodhaService:
             user_id=user_id,
             broker_name="zerodha",
         )
-        if not connection or not connection.credentials_kms_id:
+        if not connection or not connection.access_token_kms_id:
             raise ValueError(
                 "No Zerodha access token found. "
                 "Please log in via GET /brokers/zerodha/login."
             )
         token = self.vault_repository.get_secret(
-            secret_id=UUID(connection.credentials_kms_id),
+            secret_id=UUID(connection.access_token_kms_id),
         )
         if not token:
             raise ValueError(
@@ -136,10 +173,20 @@ class ZerodhaService:
     def _get_kite_client(self, user_id: UUID) -> KiteConnect:
         """
         Build an authenticated KiteConnect client for this user.
-        Retrieves the access token from Vault and sets it.
+        Retrieves the api_key from the connection and the access token
+        from Vault.
         """
+        connection = self.broker_connection_repository.get_by_user_and_broker(
+            user_id=user_id,
+            broker_name="zerodha",
+        )
+        if not connection or not connection.api_key:
+            raise ValueError(
+                "No Zerodha API key on file. Submit your credentials via "
+                "POST /brokers/zerodha/credentials."
+            )
         access_token = self.get_access_token(user_id=user_id)
-        kite = KiteConnect(api_key=settings.ZERODHA_API_KEY)
+        kite = KiteConnect(api_key=connection.api_key)
         kite.set_access_token(access_token)
         return kite
 

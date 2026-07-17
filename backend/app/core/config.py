@@ -6,11 +6,24 @@ load_dotenv(override=True)
 
 class Settings:
     DATABASE_URL: str = os.environ.get("DATABASE_URL", "")
-    ZERODHA_API_KEY: str = os.environ.get("ZERODHA_API_KEY", "")
-    ZERODHA_API_SECRET: str = os.environ.get("ZERODHA_API_SECRET", "")
+
+    # Phase 16 -- BYOK broker credentials. Each user's own Zerodha/Upstox/
+    # Groww api_key + api_secret now live on broker_connections (api_key
+    # plain, secrets in Vault) -- no more global ZERODHA_API_KEY/SECRET.
+    # This secret signs the short-lived OAuth callback "state" param so
+    # brokers' unauthenticated redirect-back endpoints can't be handed an
+    # arbitrary user_id (see app/core/oauth_state.py).
+    OAUTH_STATE_SECRET: str = os.environ.get("OAUTH_STATE_SECRET", "")
+
     SUPABASE_URL: str = os.environ.get(
         "SUPABASE_URL", "https://ozbzbesayaxmptsyaznb.supabase.co"
     )
+
+    # Phase 16 -- where broker OAuth callbacks (e.g. /brokers/zerodha/callback,
+    # hit by a raw browser redirect from the broker, not an API call) send
+    # the user's browser back to after completing the exchange. Mirrors the
+    # frontend's own NEXT_PUBLIC_API_URL pointing the other direction.
+    FRONTEND_URL: str = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
     # Phase 12 — Razorpay billing. All empty until an admin sets up a
     # Razorpay account and pastes TEST-mode credentials here — see the

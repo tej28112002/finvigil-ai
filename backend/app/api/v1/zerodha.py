@@ -1,10 +1,13 @@
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user_id
+from app.core.config import settings
 from app.db.session import get_db
 from app.repositories.broker_connection_repository import (
     BrokerConnectionRepository,
@@ -24,15 +27,6 @@ router = APIRouter()
 
 class ZerodhaLoginResponse(BaseModel):
     login_url: str
-
-
-class ZerodhaCallbackResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: UUID
-    user_id: UUID
-    broker_name: str
-    status: str
-    connected: bool = True
 
 
 def get_zerodha_service(
@@ -67,34 +61,36 @@ def get_zerodha_login_url(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get(
-    "/brokers/zerodha/callback",
-    response_model=ZerodhaCallbackResponse
-)
+@router.get("/brokers/zerodha/callback")
 def zerodha_callback(
     request_token: str,
+    state: str,
     # Deliberately NOT auth-gated: this endpoint is hit by a raw browser
     # redirect FROM Zerodha, which cannot carry an Authorization header.
-    # user_id stays a query param here — a documented exception to the
-    # Phase 11.2 auth rollout. Proper fix (a signed 'state' param round-
-    # tripped through the OAuth flow) is flagged as tech debt, not built.
-    user_id: UUID,
+    # `state` is a signed, short-lived token (app/core/oauth_state.py)
+    # generated at GET /brokers/zerodha/login time and carried through via
+    # Kite Connect's redirect_params mechanism -- replaces the previous bare
+    # user_id query param (documented tech debt, now closed).
+    #
+    # Redirects the browser straight back into the app instead of returning
+    # JSON -- now that `state` carries the user identity securely, the old
+    # "copy the request_token out of the failed redirect and paste it into
+    # this URL yourself" manual step (Phase 4.5's known follow-up) is no
+    # longer needed.
     service: ZerodhaService = Depends(get_zerodha_service)
 ):
     try:
-        connection = service.handle_callback(
-            user_id=user_id,
+        service.handle_callback(
+            state=state,
             request_token=request_token,
         )
-        return ZerodhaCallbackResponse(
-            id=connection.id,
-            user_id=connection.user_id,
-            broker_name=connection.broker_name,
-            status=connection.status,
-            connected=True,
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/brokers?zerodha=connected"
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/brokers?zerodha=error&message={quote(str(e))}"
+        )
 
 
 @router.post(

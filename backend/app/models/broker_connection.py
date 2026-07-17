@@ -40,10 +40,14 @@ class BrokerConnection(UUIDMixin, TimestampMixin, Base):
         nullable=False,
         server_default=text("'active'"),
     )
-    credentials_kms_id: Mapped[str | None] = mapped_column(
-        String,
-        nullable=True,
-    )
+    # BYOK (Phase 16): each user supplies their own broker app credentials.
+    # api_key is a client identifier, not a secret (Kite Connect's own docs
+    # say as much) -- stored plain. The other three are genuine secrets and
+    # live in Supabase Vault, referenced here by their vault.secrets UUID.
+    api_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    api_secret_kms_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    access_token_kms_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    totp_secret_kms_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     trades: Mapped[List["Trade"]] = relationship(
         back_populates="broker_connection",

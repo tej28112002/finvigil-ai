@@ -210,6 +210,10 @@ class FakeBrokerConnection:
     broker_name: str
     status: str = "active"
     id: UUID = field(default_factory=uuid4)
+    api_key: str | None = None
+    api_secret_kms_id: str | None = None
+    access_token_kms_id: str | None = None
+    totp_secret_kms_id: str | None = None
 
 
 class FakeBrokerConnectionRepository:
@@ -225,14 +229,55 @@ class FakeBrokerConnectionRepository:
     def get_by_id(self, connection_id):
         return next((c for c in self.connections if c.id == connection_id), None)
 
-    def create_connection(self, user_id, broker_name, credentials_kms_id=None):
-        conn = FakeBrokerConnection(user_id=user_id, broker_name=broker_name)
+    def create_connection(self, user_id, broker_name, api_key=None, api_secret_kms_id=None):
+        conn = FakeBrokerConnection(
+            user_id=user_id,
+            broker_name=broker_name,
+            api_key=api_key,
+            api_secret_kms_id=api_secret_kms_id,
+        )
         self.connections.append(conn)
         return conn
 
     def update_status(self, connection, status):
         connection.status = status
         return connection
+
+    def update_api_key(self, connection, api_key):
+        connection.api_key = api_key
+        return connection
+
+    def update_api_secret_kms_id(self, connection, api_secret_kms_id):
+        connection.api_secret_kms_id = api_secret_kms_id
+        return connection
+
+    def update_access_token_kms_id(self, connection, access_token_kms_id):
+        connection.access_token_kms_id = access_token_kms_id
+        return connection
+
+    def update_totp_secret_kms_id(self, connection, totp_secret_kms_id):
+        connection.totp_secret_kms_id = totp_secret_kms_id
+        return connection
+
+
+class FakeVaultRepository:
+    """In-memory fake for Supabase Vault (vault.create_secret /
+    vault.update_secret / vault.decrypted_secrets), keyed by a fake UUID
+    the same way the real VaultRepository is keyed by the real Vault's."""
+
+    def __init__(self):
+        self.secrets: dict[UUID, str] = {}
+
+    def create_secret(self, secret_value, name, description=""):
+        secret_id = uuid4()
+        self.secrets[secret_id] = secret_value
+        return secret_id
+
+    def update_secret(self, secret_id, secret_value, name, description=""):
+        self.secrets[secret_id] = secret_value
+
+    def get_secret(self, secret_id):
+        return self.secrets.get(secret_id)
 
 
 @dataclass

@@ -56,7 +56,14 @@ CREATE TABLE public.broker_connections (
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     broker_name broker_enum NOT NULL,
     status broker_status_enum NOT NULL DEFAULT 'active',
-    credentials_kms_id VARCHAR(255),
+    -- BYOK (Phase 16): each user supplies their own broker app credentials.
+    -- api_key is a client identifier, not a secret (Kite Connect's own docs
+    -- say as much) -- stored plain. The other three are genuine secrets and
+    -- live in Supabase Vault, referenced here by their vault.secrets UUID.
+    api_key VARCHAR(255),
+    api_secret_kms_id VARCHAR(255),
+    access_token_kms_id VARCHAR(255),
+    totp_secret_kms_id VARCHAR(255),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, broker_name)

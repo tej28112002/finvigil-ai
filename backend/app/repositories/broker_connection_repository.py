@@ -34,13 +34,15 @@ class BrokerConnectionRepository(BaseRepository[BrokerConnection]):
         self,
         user_id: uuid.UUID,
         broker_name: str,
-        credentials_kms_id: str | None,
+        api_key: str | None = None,
+        api_secret_kms_id: str | None = None,
     ) -> BrokerConnection:
         return self.create(
             user_id=user_id,
             broker_name=broker_name,
             status="active",
-            credentials_kms_id=credentials_kms_id,
+            api_key=api_key,
+            api_secret_kms_id=api_secret_kms_id,
         )
 
     def update_status(
@@ -50,11 +52,38 @@ class BrokerConnectionRepository(BaseRepository[BrokerConnection]):
         self.db.flush()
         return connection
 
-    def update_credentials_kms_id(
+    def update_api_key(
         self,
         connection: BrokerConnection,
-        credentials_kms_id: str,
+        api_key: str,
     ) -> BrokerConnection:
-        connection.credentials_kms_id = credentials_kms_id
+        connection.api_key = api_key
+        self.db.flush()
+        return connection
+
+    def update_api_secret_kms_id(
+        self,
+        connection: BrokerConnection,
+        api_secret_kms_id: str,
+    ) -> BrokerConnection:
+        connection.api_secret_kms_id = api_secret_kms_id
+        self.db.flush()
+        return connection
+
+    def update_access_token_kms_id(
+        self,
+        connection: BrokerConnection,
+        access_token_kms_id: str,
+    ) -> BrokerConnection:
+        connection.access_token_kms_id = access_token_kms_id
+        self.db.flush()
+        return connection
+
+    def update_totp_secret_kms_id(
+        self,
+        connection: BrokerConnection,
+        totp_secret_kms_id: str,
+    ) -> BrokerConnection:
+        connection.totp_secret_kms_id = totp_secret_kms_id
         self.db.flush()
         return connection

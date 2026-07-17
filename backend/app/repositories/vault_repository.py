@@ -26,8 +26,9 @@ class VaultRepository:
     ) -> uuid.UUID:
         """
         Store a new secret in Vault.
-        Returns the Vault secret UUID, which the caller stores
-        in broker_connections.credentials_kms_id.
+        Returns the Vault secret UUID, which the caller stores in one of
+        broker_connections' *_kms_id columns (api_secret_kms_id,
+        access_token_kms_id, totp_secret_kms_id).
         """
         result = self.db.execute(
             text(
