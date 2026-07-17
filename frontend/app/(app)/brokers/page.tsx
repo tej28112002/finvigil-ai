@@ -355,12 +355,6 @@ function BrokersPageInner() {
         {!zerodha?.has_credentials && (
           <div className="mt-4 rounded-md border border-rule bg-bg p-4 text-sm">
             <p className="font-medium text-ink">Set up your own Kite Connect app</p>
-            <p className="mt-1 text-ink-muted">
-              FinVigil no longer uses a shared broker key — you connect using
-              your own Zerodha developer app, the same way you would with
-              AlgoTest or Sensibull. Your API key and secret are encrypted
-              and never shared with other users.
-            </p>
             <ol className="mt-3 list-decimal space-y-2 pl-4 text-ink-muted">
               <li>
                 Go to{" "}
@@ -372,8 +366,7 @@ function BrokersPageInner() {
                 >
                   developers.kite.trade/apps
                 </a>{" "}
-                and create a new Connect app. This requires a Kite Connect
-                subscription (₹500/month, billed by Zerodha directly).
+                and create a new Connect app.
               </li>
               <li>
                 Set the app&apos;s <strong>Redirect URL</strong> to exactly:
