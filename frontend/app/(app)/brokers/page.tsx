@@ -74,8 +74,6 @@ function BrokersPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Set by the backend redirecting back here after /brokers/zerodha/callback
-  // completes (or fails) — see app/api/v1/zerodha.py.
   const [callbackNotice, setCallbackNotice] = useState<
     { tone: "success" | "error"; message: string } | null
   >(null);
@@ -91,7 +89,7 @@ function BrokersPageInner() {
   const [submittingCredentials, setSubmittingCredentials] = useState(false);
   const [credentialsError, setCredentialsError] = useState<string | null>(null);
 
-  // Upstox — same OAuth-redirect shape as Zerodha
+  // Upstox
   const [upstoxSyncing, setUpstoxSyncing] = useState(false);
   const [upstoxSyncResult, setUpstoxSyncResult] = useState<CsvImportResult | null>(null);
   const [upstoxLastSynced, setUpstoxLastSynced] = useState<string | null>(null);
@@ -101,7 +99,7 @@ function BrokersPageInner() {
   const [submittingUpstoxCredentials, setSubmittingUpstoxCredentials] = useState(false);
   const [upstoxCredentialsError, setUpstoxCredentialsError] = useState<string | null>(null);
 
-  // Groww — TOTP-based (no OAuth redirect; token is refreshed automatically on every sync)
+  // Groww — TOTP-based
   const [growwSyncing, setGrowwSyncing] = useState(false);
   const [growwSyncResult, setGrowwSyncResult] = useState<CsvImportResult | null>(null);
   const [growwLastSynced, setGrowwLastSynced] = useState<string | null>(null);
@@ -114,6 +112,14 @@ function BrokersPageInner() {
   const [csvResult, setCsvResult] = useState<CsvImportResult | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Accordion + search state
+  const [expandedBroker, setExpandedBroker] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  function toggleBroker(key: string) {
+    setExpandedBroker((prev) => (prev === key ? null : key));
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,12 +150,11 @@ function BrokersPageInner() {
     load();
   }, [load]);
 
-  // Read ?zerodha=connected|error&message=... left by the backend redirect,
-  // show a one-time banner, then strip it so a refresh doesn't re-show it.
   useEffect(() => {
     const zerodhaResult = searchParams.get("zerodha");
     if (zerodhaResult === "connected") {
       setCallbackNotice({ tone: "success", message: "Zerodha connected." });
+      setExpandedBroker("zerodha");
       writeLastSynced("zerodha");
       setZerodhaLastSynced(readLastSynced("zerodha"));
       router.replace("/brokers");
@@ -159,16 +164,17 @@ function BrokersPageInner() {
         tone: "error",
         message: searchParams.get("message") || "Could not connect Zerodha.",
       });
+      setExpandedBroker("zerodha");
       router.replace("/brokers");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  // Same pattern for ?upstox=connected|error, left by /brokers/upstox/callback.
   useEffect(() => {
     const upstoxResult = searchParams.get("upstox");
     if (upstoxResult === "connected") {
       setCallbackNotice({ tone: "success", message: "Upstox connected." });
+      setExpandedBroker("upstox");
       writeLastSynced("upstox");
       setUpstoxLastSynced(readLastSynced("upstox"));
       router.replace("/brokers");
@@ -178,6 +184,7 @@ function BrokersPageInner() {
         tone: "error",
         message: searchParams.get("message") || "Could not connect Upstox.",
       });
+      setExpandedBroker("upstox");
       router.replace("/brokers");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,10 +231,6 @@ function BrokersPageInner() {
       const { login_url } = await apiFetch<{ login_url: string }>(
         "/brokers/zerodha/login"
       );
-      // Full-page navigation, same tab: Zerodha's redirect now carries a
-      // signed state token, so the backend callback can complete the login
-      // and redirect straight back to /brokers on its own — no more manual
-      // "open in a new tab, copy the request_token, paste it here" step.
       window.location.href = login_url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start connect");
@@ -425,8 +428,14 @@ function BrokersPageInner() {
     );
   }
 
+  // Search filter helper
+  const q = searchQuery.toLowerCase().trim();
+  const visible = (name: string) => !q || name.toLowerCase().includes(q);
+
+  const COMING_SOON = ["Angel One", "Dhan", "Kotak Securities"] as const;
+
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-4">
       {callbackNotice && (
         <Card className="p-4">
           <p
@@ -444,425 +453,498 @@ function BrokersPageInner() {
         </Card>
       )}
 
-      {/* Zerodha — bring-your-own-key */}
-      <Card className="p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{
-                backgroundColor: zerodha?.status === "active" ? "var(--gain)" : "var(--ink-faint)",
-              }}
-              aria-hidden="true"
-            />
-            <span
-              className="h-3 w-3 shrink-0 rounded-sm"
-              style={{ backgroundColor: "var(--color-broker-zerodha)" }}
-              aria-hidden="true"
-            />
-            <div>
-              <p className="font-medium text-ink">Zerodha</p>
-              <p className="text-xs text-ink-muted">
-                {zerodha?.status === "active"
-                  ? "Connected"
-                  : zerodha?.has_credentials
-                    ? "Credentials saved — not yet connected"
-                    : "Not set up"}
-                {zerodhaLastSynced && zerodha?.status === "active" && (
-                  <> · Last synced {new Date(zerodhaLastSynced).toLocaleString("en-IN")}</>
-                )}
-              </p>
-            </div>
-          </div>
-
-          {zerodha?.status === "active" && (
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={handleConnect} loading={connecting}>
-                Reconnect
-              </Button>
-              <Button onClick={handleSyncNow} loading={syncing}>
-                Sync now
-              </Button>
-            </div>
-          )}
-          {zerodha?.has_credentials && zerodha.status !== "active" && (
-            <Button onClick={handleConnect} loading={connecting}>
-              Connect Zerodha
-            </Button>
-          )}
-        </div>
-
-        {zerodha?.status === "active" && portfolioValue !== null && (
-          <div className="mt-4 flex flex-wrap gap-6 border-t border-rule pt-4">
-            <div>
-              <MetricLabel>Total portfolio value</MetricLabel>
-              <div className="mt-1">
-                <Money value={portfolioValue} size="md" />
-              </div>
-            </div>
-            <div>
-              <MetricLabel>Holdings</MetricLabel>
-              <p className="mt-1 font-mono text-base text-ink">{holdingsCount ?? 0}</p>
-            </div>
-          </div>
-        )}
-
-        {!zerodha?.has_credentials && (
-          <div className="mt-4 rounded-md border border-rule bg-bg p-4 text-sm">
-            <p className="font-medium text-ink">Set up your own Kite Connect app</p>
-            <ol className="mt-3 list-decimal space-y-2 pl-4 text-ink-muted">
-              <li>
-                Go to{" "}
-                <a
-                  href="https://developers.kite.trade/apps"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-brand hover:text-brand-hover"
-                >
-                  developers.kite.trade/apps
-                </a>{" "}
-                and create a new Connect app.
-              </li>
-              <li>
-                Set the app&apos;s <strong>Redirect URL</strong> to exactly:
-                <code className="mt-1 block break-all rounded bg-surface-raised px-2 py-1 text-xs">
-                  {ZERODHA_CALLBACK_URL}
-                </code>
-              </li>
-              <li>Copy the app&apos;s API key and API secret and paste them below.</li>
-            </ol>
-
-            <form onSubmit={handleSubmitCredentials} className="mt-4 space-y-3">
-              <div>
-                <label htmlFor="zerodha-api-key" className="mb-1 block text-xs font-medium text-ink">
-                  API key
-                </label>
-                <input
-                  id="zerodha-api-key"
-                  type="text"
-                  required
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
-                  placeholder="e.g. 6uamrld2mc32anjc"
-                />
-              </div>
-              <div>
-                <label htmlFor="zerodha-api-secret" className="mb-1 block text-xs font-medium text-ink">
-                  API secret
-                </label>
-                <input
-                  id="zerodha-api-secret"
-                  type="password"
-                  required
-                  autoComplete="off"
-                  value={apiSecret}
-                  onChange={(e) => setApiSecret(e.target.value)}
-                  className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
-                  placeholder="Kept encrypted, never shown again"
-                />
-              </div>
-              {credentialsError && (
-                <p className="text-sm text-loss" role="alert">{credentialsError}</p>
-              )}
-              <Button type="submit" loading={submittingCredentials}>
-                Save credentials
-              </Button>
-            </form>
-          </div>
-        )}
-
-        {syncResult && (
-          <div className="mt-4 rounded-md border border-rule bg-bg p-3 text-sm text-ink-muted">
-            Synced: {syncResult.imported} imported, {syncResult.skipped} skipped
-            {syncResult.errors.length > 0 && `, ${syncResult.errors.length} errors`}.
-          </div>
-        )}
-      </Card>
-
-      {/* Upstox — bring-your-own-key */}
-      <Card className="p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{
-                backgroundColor: upstox?.status === "active" ? "var(--gain)" : "var(--ink-faint)",
-              }}
-              aria-hidden="true"
-            />
-            <span
-              className="h-3 w-3 shrink-0 rounded-sm"
-              style={{ backgroundColor: "var(--color-broker-upstox)" }}
-              aria-hidden="true"
-            />
-            <div>
-              <p className="font-medium text-ink">Upstox</p>
-              <p className="text-xs text-ink-muted">
-                {upstox?.status === "active"
-                  ? "Connected"
-                  : upstox?.has_credentials
-                    ? "Credentials saved — not yet connected"
-                    : "Not set up"}
-                {upstoxLastSynced && upstox?.status === "active" && (
-                  <> · Last synced {new Date(upstoxLastSynced).toLocaleString("en-IN")}</>
-                )}
-              </p>
-            </div>
-          </div>
-
-          {upstox?.status === "active" && (
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={handleConnectUpstox} loading={upstoxConnecting}>
-                Reconnect
-              </Button>
-              <Button onClick={handleSyncUpstoxNow} loading={upstoxSyncing}>
-                Sync now
-              </Button>
-            </div>
-          )}
-          {upstox?.has_credentials && upstox.status !== "active" && (
-            <Button onClick={handleConnectUpstox} loading={upstoxConnecting}>
-              Connect Upstox
-            </Button>
-          )}
-        </div>
-
-        {!upstox?.has_credentials && (
-          <div className="mt-4 rounded-md border border-rule bg-bg p-4 text-sm">
-            <p className="font-medium text-ink">Set up your own Upstox app</p>
-            <ol className="mt-3 list-decimal space-y-2 pl-4 text-ink-muted">
-              <li>
-                Go to{" "}
-                <a
-                  href="https://account.upstox.com/developer/apps"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-brand hover:text-brand-hover"
-                >
-                  account.upstox.com/developer/apps
-                </a>{" "}
-                and create a new app.
-              </li>
-              <li>
-                Set the app&apos;s <strong>Redirect URI</strong> to exactly:
-                <code className="mt-1 block break-all rounded bg-surface-raised px-2 py-1 text-xs">
-                  {UPSTOX_CALLBACK_URL}
-                </code>
-              </li>
-              <li>Copy the app&apos;s API key and API secret and paste them below.</li>
-            </ol>
-
-            <form onSubmit={handleSubmitUpstoxCredentials} className="mt-4 space-y-3">
-              <div>
-                <label htmlFor="upstox-api-key" className="mb-1 block text-xs font-medium text-ink">
-                  API key
-                </label>
-                <input
-                  id="upstox-api-key"
-                  type="text"
-                  required
-                  value={upstoxApiKey}
-                  onChange={(e) => setUpstoxApiKey(e.target.value)}
-                  className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
-                  placeholder="Client ID"
-                />
-              </div>
-              <div>
-                <label htmlFor="upstox-api-secret" className="mb-1 block text-xs font-medium text-ink">
-                  API secret
-                </label>
-                <input
-                  id="upstox-api-secret"
-                  type="password"
-                  required
-                  autoComplete="off"
-                  value={upstoxApiSecret}
-                  onChange={(e) => setUpstoxApiSecret(e.target.value)}
-                  className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
-                  placeholder="Kept encrypted, never shown again"
-                />
-              </div>
-              {upstoxCredentialsError && (
-                <p className="text-sm text-loss" role="alert">{upstoxCredentialsError}</p>
-              )}
-              <Button type="submit" loading={submittingUpstoxCredentials}>
-                Save credentials
-              </Button>
-            </form>
-          </div>
-        )}
-
-        {upstoxSyncResult && (
-          <div className="mt-4 rounded-md border border-rule bg-bg p-3 text-sm text-ink-muted">
-            Synced: {upstoxSyncResult.imported} imported, {upstoxSyncResult.skipped} skipped
-            {upstoxSyncResult.errors.length > 0 && `, ${upstoxSyncResult.errors.length} errors`}.
-          </div>
-        )}
-      </Card>
-
-      {/* Groww — bring-your-own-key, TOTP-based (no OAuth redirect) */}
-      <Card className="p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{
-                backgroundColor: groww?.status === "active" ? "var(--gain)" : "var(--ink-faint)",
-              }}
-              aria-hidden="true"
-            />
-            <span
-              className="h-3 w-3 shrink-0 rounded-sm"
-              style={{ backgroundColor: "var(--color-broker-groww, #00d09c)" }}
-              aria-hidden="true"
-            />
-            <div>
-              <p className="font-medium text-ink">Groww</p>
-              <p className="text-xs text-ink-muted">
-                {groww?.status === "active"
-                  ? "Connected"
-                  : groww?.has_credentials
-                    ? "Credentials saved — sync to verify"
-                    : "Not set up"}
-                {growwLastSynced && groww?.status === "active" && (
-                  <> · Last synced {new Date(growwLastSynced).toLocaleString("en-IN")}</>
-                )}
-              </p>
-            </div>
-          </div>
-
-          {groww?.has_credentials && (
-            <Button onClick={handleSyncGrowwNow} loading={growwSyncing}>
-              Sync now
-            </Button>
-          )}
-        </div>
-
-        {!groww?.has_credentials && (
-          <div className="mt-4 rounded-md border border-rule bg-bg p-4 text-sm">
-            <p className="font-medium text-ink">Set up your own Groww Trade API key</p>
-            <ol className="mt-3 list-decimal space-y-2 pl-4 text-ink-muted">
-              <li>
-                Go to{" "}
-                <a
-                  href="https://groww.in/trade-api"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-brand hover:text-brand-hover"
-                >
-                  groww.in/trade-api
-                </a>{" "}
-                and subscribe to the API plan.
-              </li>
-              <li>
-                From your Groww account, open Trade API settings and generate your API key.
-              </li>
-              <li>
-                Make sure TOTP is enabled on your account (Settings → Security), then copy
-                your TOTP secret from the Groww Trade API console.
-              </li>
-              <li>Paste both values below — no redirect URL is needed.</li>
-            </ol>
-
-            <form onSubmit={handleSubmitGrowwCredentials} className="mt-4 space-y-3">
-              <div>
-                <label htmlFor="groww-api-key" className="mb-1 block text-xs font-medium text-ink">
-                  API key
-                </label>
-                <input
-                  id="groww-api-key"
-                  type="text"
-                  required
-                  value={growwApiKey}
-                  onChange={(e) => setGrowwApiKey(e.target.value)}
-                  className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
-                  placeholder="Your Groww API key"
-                />
-              </div>
-              <div>
-                <label htmlFor="groww-totp-secret" className="mb-1 block text-xs font-medium text-ink">
-                  TOTP secret
-                </label>
-                <input
-                  id="groww-totp-secret"
-                  type="password"
-                  required
-                  autoComplete="off"
-                  value={growwTotpSecret}
-                  onChange={(e) => setGrowwTotpSecret(e.target.value)}
-                  className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
-                  placeholder="Kept encrypted, never shown again"
-                />
-              </div>
-              {growwCredentialsError && (
-                <p className="text-sm text-loss" role="alert">{growwCredentialsError}</p>
-              )}
-              <Button type="submit" loading={submittingGrowwCredentials}>
-                Save credentials
-              </Button>
-            </form>
-          </div>
-        )}
-
-        {growwSyncResult && (
-          <div className="mt-4 rounded-md border border-rule bg-bg p-3 text-sm text-ink-muted">
-            Synced: {growwSyncResult.imported} imported, {growwSyncResult.skipped} skipped
-            {growwSyncResult.errors.length > 0 && `, ${growwSyncResult.errors.length} errors`}.
-          </div>
-        )}
-      </Card>
-
-      {/* Angel One / Dhan / Kotak — coming soon, muted */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {(["Angel One", "Dhan", "Kotak Securities"] as const).map((name) => (
-          <Card key={name} className="p-5 opacity-60">
-            <div className="flex items-center justify-between">
-              <p className="font-medium text-ink-muted">{name}</p>
-              <Badge tone="neutral">Coming soon</Badge>
-            </div>
-          </Card>
-        ))}
+      {/* Search */}
+      <div>
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search your broker…"
+          aria-label="Search brokers"
+          className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none"
+        />
       </div>
 
-      {/* CSV import */}
-      <Card className="p-5">
-        <MetricLabel>Import a tradebook</MetricLabel>
-        <p className="mt-1 text-sm text-ink-muted">
-          Upload a Zerodha tradebook export (.csv or .xlsx) to backfill trade
-          history that isn&apos;t available via daily sync.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.xlsx"
-            aria-label="Tradebook file"
-            className="text-sm text-ink-muted file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-rule file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:border-rule-strong"
-          />
-          <Button onClick={handleCsvUpload} loading={csvUploading} variant="secondary">
-            Upload
-          </Button>
-        </div>
-        {csvError && (
-          <p className="mt-2 text-sm text-loss" role="alert">{csvError}</p>
-        )}
-        {csvResult && (
-          <div className="mt-3 rounded-md border border-rule bg-bg p-3 text-sm">
-            <p className="text-ink">
-              {csvResult.imported} imported, {csvResult.skipped} skipped, of{" "}
-              {csvResult.total_rows} rows.
-            </p>
-            {csvResult.errors.length > 0 && (
-              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-loss">
-                {csvResult.errors.slice(0, 5).map((e, i) => (
-                  <li key={i}>{e}</li>
-                ))}
-              </ul>
-            )}
+      {/* ── Zerodha ───────────────────────────────────────────────────── */}
+      {visible("Zerodha") && (
+        <Card className="p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{
+                  backgroundColor: zerodha?.status === "active" ? "var(--gain)" : "var(--ink-faint)",
+                }}
+                aria-hidden="true"
+              />
+              <span
+                className="h-3 w-3 shrink-0 rounded-sm"
+                style={{ backgroundColor: "var(--color-broker-zerodha)" }}
+                aria-hidden="true"
+              />
+              <div>
+                <p className="font-medium text-ink">Zerodha</p>
+                <p className="text-xs text-ink-muted">
+                  {zerodha?.status === "active"
+                    ? "Connected"
+                    : zerodha?.has_credentials
+                      ? "Credentials saved — not yet connected"
+                      : "Not set up"}
+                  {zerodhaLastSynced && zerodha?.status === "active" && (
+                    <> · Last synced {new Date(zerodhaLastSynced).toLocaleString("en-IN")}</>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <Button
+              variant={zerodha?.status === "active" ? "secondary" : "primary"}
+              onClick={() => toggleBroker("zerodha")}
+              aria-expanded={expandedBroker === "zerodha"}
+            >
+              {zerodha?.status === "active" ? "Manage" : "Connect"}
+            </Button>
           </div>
-        )}
-      </Card>
+
+          {expandedBroker === "zerodha" && (
+            <div className="mt-4 space-y-4 border-t border-rule pt-4">
+              {/* Active: portfolio summary + sync/reconnect */}
+              {zerodha?.status === "active" && (
+                <>
+                  {portfolioValue !== null && (
+                    <div className="flex flex-wrap gap-6">
+                      <div>
+                        <MetricLabel>Total portfolio value</MetricLabel>
+                        <div className="mt-1">
+                          <Money value={portfolioValue} size="md" />
+                        </div>
+                      </div>
+                      <div>
+                        <MetricLabel>Holdings</MetricLabel>
+                        <p className="mt-1 font-mono text-base text-ink">{holdingsCount ?? 0}</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button variant="secondary" onClick={handleConnect} loading={connecting}>
+                      Reconnect
+                    </Button>
+                    <Button onClick={handleSyncNow} loading={syncing}>
+                      Sync now
+                    </Button>
+                  </div>
+                  {syncResult && (
+                    <div className="rounded-md border border-rule bg-bg p-3 text-sm text-ink-muted">
+                      Synced: {syncResult.imported} imported, {syncResult.skipped} skipped
+                      {syncResult.errors.length > 0 && `, ${syncResult.errors.length} errors`}.
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Has credentials but not connected: show OAuth button */}
+              {zerodha?.has_credentials && zerodha.status !== "active" && (
+                <Button onClick={handleConnect} loading={connecting}>
+                  Connect Zerodha
+                </Button>
+              )}
+
+              {/* No credentials: setup instructions + form */}
+              {!zerodha?.has_credentials && (
+                <div className="rounded-md border border-rule bg-bg p-4 text-sm">
+                  <p className="font-medium text-ink">Set up your own Kite Connect app</p>
+                  <ol className="mt-3 list-decimal space-y-2 pl-4 text-ink-muted">
+                    <li>
+                      Go to{" "}
+                      <a
+                        href="https://developers.kite.trade/apps"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-brand hover:text-brand-hover"
+                      >
+                        developers.kite.trade/apps
+                      </a>{" "}
+                      and create a new Connect app.
+                    </li>
+                    <li>
+                      Set the app&apos;s <strong>Redirect URL</strong> to exactly:
+                      <code className="mt-1 block break-all rounded bg-surface-raised px-2 py-1 text-xs">
+                        {ZERODHA_CALLBACK_URL}
+                      </code>
+                    </li>
+                    <li>Copy the app&apos;s API key and API secret and paste them below.</li>
+                  </ol>
+
+                  <form onSubmit={handleSubmitCredentials} className="mt-4 space-y-3">
+                    <div>
+                      <label htmlFor="zerodha-api-key" className="mb-1 block text-xs font-medium text-ink">
+                        API key
+                      </label>
+                      <input
+                        id="zerodha-api-key"
+                        type="text"
+                        required
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
+                        placeholder="e.g. 6uamrld2mc32anjc"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="zerodha-api-secret" className="mb-1 block text-xs font-medium text-ink">
+                        API secret
+                      </label>
+                      <input
+                        id="zerodha-api-secret"
+                        type="password"
+                        required
+                        autoComplete="off"
+                        value={apiSecret}
+                        onChange={(e) => setApiSecret(e.target.value)}
+                        className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
+                        placeholder="Kept encrypted, never shown again"
+                      />
+                    </div>
+                    {credentialsError && (
+                      <p className="text-sm text-loss" role="alert">{credentialsError}</p>
+                    )}
+                    <Button type="submit" loading={submittingCredentials}>
+                      Save credentials
+                    </Button>
+                  </form>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* ── Upstox ────────────────────────────────────────────────────── */}
+      {visible("Upstox") && (
+        <Card className="p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{
+                  backgroundColor: upstox?.status === "active" ? "var(--gain)" : "var(--ink-faint)",
+                }}
+                aria-hidden="true"
+              />
+              <span
+                className="h-3 w-3 shrink-0 rounded-sm"
+                style={{ backgroundColor: "var(--color-broker-upstox)" }}
+                aria-hidden="true"
+              />
+              <div>
+                <p className="font-medium text-ink">Upstox</p>
+                <p className="text-xs text-ink-muted">
+                  {upstox?.status === "active"
+                    ? "Connected"
+                    : upstox?.has_credentials
+                      ? "Credentials saved — not yet connected"
+                      : "Not set up"}
+                  {upstoxLastSynced && upstox?.status === "active" && (
+                    <> · Last synced {new Date(upstoxLastSynced).toLocaleString("en-IN")}</>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <Button
+              variant={upstox?.status === "active" ? "secondary" : "primary"}
+              onClick={() => toggleBroker("upstox")}
+              aria-expanded={expandedBroker === "upstox"}
+            >
+              {upstox?.status === "active" ? "Manage" : "Connect"}
+            </Button>
+          </div>
+
+          {expandedBroker === "upstox" && (
+            <div className="mt-4 space-y-4 border-t border-rule pt-4">
+              {/* Active: sync/reconnect */}
+              {upstox?.status === "active" && (
+                <>
+                  <div className="flex gap-2">
+                    <Button variant="secondary" onClick={handleConnectUpstox} loading={upstoxConnecting}>
+                      Reconnect
+                    </Button>
+                    <Button onClick={handleSyncUpstoxNow} loading={upstoxSyncing}>
+                      Sync now
+                    </Button>
+                  </div>
+                  {upstoxSyncResult && (
+                    <div className="rounded-md border border-rule bg-bg p-3 text-sm text-ink-muted">
+                      Synced: {upstoxSyncResult.imported} imported, {upstoxSyncResult.skipped} skipped
+                      {upstoxSyncResult.errors.length > 0 && `, ${upstoxSyncResult.errors.length} errors`}.
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Has credentials but not connected: OAuth button */}
+              {upstox?.has_credentials && upstox.status !== "active" && (
+                <Button onClick={handleConnectUpstox} loading={upstoxConnecting}>
+                  Connect Upstox
+                </Button>
+              )}
+
+              {/* No credentials: setup instructions + form */}
+              {!upstox?.has_credentials && (
+                <div className="rounded-md border border-rule bg-bg p-4 text-sm">
+                  <p className="font-medium text-ink">Set up your own Upstox app</p>
+                  <ol className="mt-3 list-decimal space-y-2 pl-4 text-ink-muted">
+                    <li>
+                      Go to{" "}
+                      <a
+                        href="https://account.upstox.com/developer/apps"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-brand hover:text-brand-hover"
+                      >
+                        account.upstox.com/developer/apps
+                      </a>{" "}
+                      and create a new app.
+                    </li>
+                    <li>
+                      Set the app&apos;s <strong>Redirect URI</strong> to exactly:
+                      <code className="mt-1 block break-all rounded bg-surface-raised px-2 py-1 text-xs">
+                        {UPSTOX_CALLBACK_URL}
+                      </code>
+                    </li>
+                    <li>Copy the app&apos;s API key and API secret and paste them below.</li>
+                  </ol>
+
+                  <form onSubmit={handleSubmitUpstoxCredentials} className="mt-4 space-y-3">
+                    <div>
+                      <label htmlFor="upstox-api-key" className="mb-1 block text-xs font-medium text-ink">
+                        API key
+                      </label>
+                      <input
+                        id="upstox-api-key"
+                        type="text"
+                        required
+                        value={upstoxApiKey}
+                        onChange={(e) => setUpstoxApiKey(e.target.value)}
+                        className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
+                        placeholder="Client ID"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="upstox-api-secret" className="mb-1 block text-xs font-medium text-ink">
+                        API secret
+                      </label>
+                      <input
+                        id="upstox-api-secret"
+                        type="password"
+                        required
+                        autoComplete="off"
+                        value={upstoxApiSecret}
+                        onChange={(e) => setUpstoxApiSecret(e.target.value)}
+                        className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
+                        placeholder="Kept encrypted, never shown again"
+                      />
+                    </div>
+                    {upstoxCredentialsError && (
+                      <p className="text-sm text-loss" role="alert">{upstoxCredentialsError}</p>
+                    )}
+                    <Button type="submit" loading={submittingUpstoxCredentials}>
+                      Save credentials
+                    </Button>
+                  </form>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* ── Groww ─────────────────────────────────────────────────────── */}
+      {visible("Groww") && (
+        <Card className="p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{
+                  backgroundColor: groww?.status === "active" ? "var(--gain)" : "var(--ink-faint)",
+                }}
+                aria-hidden="true"
+              />
+              <span
+                className="h-3 w-3 shrink-0 rounded-sm"
+                style={{ backgroundColor: "var(--color-broker-groww, #00d09c)" }}
+                aria-hidden="true"
+              />
+              <div>
+                <p className="font-medium text-ink">Groww</p>
+                <p className="text-xs text-ink-muted">
+                  {groww?.status === "active"
+                    ? "Connected"
+                    : groww?.has_credentials
+                      ? "Credentials saved — sync to verify"
+                      : "Not set up"}
+                  {growwLastSynced && groww?.status === "active" && (
+                    <> · Last synced {new Date(growwLastSynced).toLocaleString("en-IN")}</>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <Button
+              variant={groww?.has_credentials ? "secondary" : "primary"}
+              onClick={() => toggleBroker("groww")}
+              aria-expanded={expandedBroker === "groww"}
+            >
+              {groww?.has_credentials ? "Manage" : "Connect"}
+            </Button>
+          </div>
+
+          {expandedBroker === "groww" && (
+            <div className="mt-4 space-y-4 border-t border-rule pt-4">
+              {/* Has credentials: sync + update form */}
+              {groww?.has_credentials && (
+                <>
+                  <Button onClick={handleSyncGrowwNow} loading={growwSyncing}>
+                    Sync now
+                  </Button>
+                  {growwSyncResult && (
+                    <div className="rounded-md border border-rule bg-bg p-3 text-sm text-ink-muted">
+                      Synced: {growwSyncResult.imported} imported, {growwSyncResult.skipped} skipped
+                      {growwSyncResult.errors.length > 0 && `, ${growwSyncResult.errors.length} errors`}.
+                    </div>
+                  )}
+                  <p className="text-xs text-ink-muted">Update credentials:</p>
+                </>
+              )}
+
+              {/* Setup or update form */}
+              <div className={groww?.has_credentials ? "" : "rounded-md border border-rule bg-bg p-4 text-sm"}>
+                {!groww?.has_credentials && (
+                  <>
+                    <p className="font-medium text-ink">Set up your own Groww Trade API key</p>
+                    <ol className="mt-3 list-decimal space-y-2 pl-4 text-ink-muted">
+                      <li>
+                        Go to{" "}
+                        <a
+                          href="https://groww.in/trade-api"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-brand hover:text-brand-hover"
+                        >
+                          groww.in/trade-api
+                        </a>{" "}
+                        and subscribe to the API plan.
+                      </li>
+                      <li>
+                        From your Groww account, open Trade API settings and generate your API key.
+                      </li>
+                      <li>
+                        Make sure TOTP is enabled on your account (Settings → Security), then copy
+                        your TOTP secret from the Groww Trade API console.
+                      </li>
+                      <li>Paste both values below — no redirect URL is needed.</li>
+                    </ol>
+                  </>
+                )}
+
+                <form onSubmit={handleSubmitGrowwCredentials} className={`space-y-3 ${!groww?.has_credentials ? "mt-4" : ""}`}>
+                  <div>
+                    <label htmlFor="groww-api-key" className="mb-1 block text-xs font-medium text-ink">
+                      API key
+                    </label>
+                    <input
+                      id="groww-api-key"
+                      type="text"
+                      required
+                      value={growwApiKey}
+                      onChange={(e) => setGrowwApiKey(e.target.value)}
+                      className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
+                      placeholder="Your Groww API key"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="groww-totp-secret" className="mb-1 block text-xs font-medium text-ink">
+                      TOTP secret
+                    </label>
+                    <input
+                      id="groww-totp-secret"
+                      type="password"
+                      required
+                      autoComplete="off"
+                      value={growwTotpSecret}
+                      onChange={(e) => setGrowwTotpSecret(e.target.value)}
+                      className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
+                      placeholder="Kept encrypted, never shown again"
+                    />
+                  </div>
+                  {growwCredentialsError && (
+                    <p className="text-sm text-loss" role="alert">{growwCredentialsError}</p>
+                  )}
+                  <Button type="submit" loading={submittingGrowwCredentials}>
+                    {groww?.has_credentials ? "Update credentials" : "Save credentials"}
+                  </Button>
+                </form>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* ── Coming soon ───────────────────────────────────────────────── */}
+      {COMING_SOON.some((name) => visible(name)) && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {COMING_SOON.filter((name) => visible(name)).map((name) => (
+            <Card key={name} className="p-5 opacity-60">
+              <div className="flex items-center justify-between">
+                <p className="font-medium text-ink-muted">{name}</p>
+                <Badge tone="neutral">Coming soon</Badge>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* ── CSV import ────────────────────────────────────────────────── */}
+      {visible("CSV Import") && (
+        <Card className="p-5">
+          <MetricLabel>Import a tradebook</MetricLabel>
+          <p className="mt-1 text-sm text-ink-muted">
+            Upload a Zerodha tradebook export (.csv or .xlsx) to backfill trade
+            history that isn&apos;t available via daily sync.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx"
+              aria-label="Tradebook file"
+              className="text-sm text-ink-muted file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-rule file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:border-rule-strong"
+            />
+            <Button onClick={handleCsvUpload} loading={csvUploading} variant="secondary">
+              Upload
+            </Button>
+          </div>
+          {csvError && (
+            <p className="mt-2 text-sm text-loss" role="alert">{csvError}</p>
+          )}
+          {csvResult && (
+            <div className="mt-3 rounded-md border border-rule bg-bg p-3 text-sm">
+              <p className="text-ink">
+                {csvResult.imported} imported, {csvResult.skipped} skipped, of{" "}
+                {csvResult.total_rows} rows.
+              </p>
+              {csvResult.errors.length > 0 && (
+                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-loss">
+                  {csvResult.errors.slice(0, 5).map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

@@ -9,9 +9,11 @@ import { createClient } from "@/lib/supabase/client";
 
 export function Sidebar({
   userEmail,
+  userRole,
   onNavigate,
 }: {
   userEmail: string | null;
+  userRole?: string | null;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -37,7 +39,7 @@ export function Sidebar({
 
       {/* Nav groups */}
       <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Main">
-        {NAV_GROUPS.map((group) => {
+        {NAV_GROUPS.filter((g) => g.label !== "Admin" || userRole === "admin").map((group) => {
           const isCollapsed = collapsed[group.label] ?? false;
           return (
             <div key={group.label} className="mb-5">

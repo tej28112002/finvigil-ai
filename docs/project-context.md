@@ -122,7 +122,7 @@ Phase 17   Production Launch
 - **Not started**: no `celery worker` / `celery beat` process has been run — deliberately left for the user to test separately before it goes anywhere near production. All verification so far calls the service layer directly (`HarvestCacheService`, `SubscriptionService`) against the real DB using the project's documented test user, never the actual `@celery_app.task`-decorated functions — those iterate every matching row in the database, not a single scoped case, so they're intentionally excluded from this project's testing process now.
 
 ## Phase 15.1 — Unit + Integration Tests — COMPLETE
-- `backend/tests/` is a real, permanent pytest suite (`pip install pytest`, run with `venv\Scripts\python.exe -m pytest tests/` from `backend/`, config in `backend/pytest.ini`). **101/101 tests pass** across 11 files, built in two passes.
+- `backend/tests/` is a real, permanent pytest suite (`pip install pytest`, run with `venv\Scripts\python.exe -m pytest tests/` from `backend/`, config in `backend/pytest.ini`). **148/148 tests pass** across 19 files.
 - Methodology, both passes: expected values independently derived BEFORE looking at what the code returns — real tax law (Budget 2024 rates, Section 70 set-off), a live web search or a live read-only Razorpay API call where external ground truth exists, hand computation from the algorithm's own documented rules where the "correctness" is this project's own design (AIS matching heuristics), and real primary-test-user data independently queried and hand-verified before being used as integration-test expected values. Never derived "correct" by running the code and copying its output.
 - Unit tests use `tests/fakes.py` (in-memory fake repositories/services, no DB/network — fast, one shared file across all test modules). Integration tests either read the documented primary test user's (`765984b3-...`) existing data read-only via a `db_session` fixture that always rolls back (verified: real writes are exercised and checked, nothing is ever permanently committed), or write through a fully disposable `db_test_user` fixture (fresh `auth.users` + `broker_connection` row per test, deleted in teardown even on failure) — the shared documented user is never mutated. Verified zero leftover rows in the DB after every full run this phase, across both passes.
 
@@ -144,6 +144,25 @@ Phase 17   Production Launch
 - `test_journal_service.py` (10): taxonomy enforcement (invalid tag rejected, whole batch rejected if any tag is invalid), tag de-duplication, cascade delete (soft-delete entry / hard-delete tags), re-verified as a permanent test replacing the original one-time manual Phase 10 verification.
 - `test_corporate_action.py` (7): split/bonus ratio math verified via the defining property (quantity * price = constant cost basis before and after), lots bought after the action date correctly excluded from adjustment, duplicate-action and invalid-ratio rejection.
 - No new production bugs found in this pass — two mistakes were caught in the TESTS themselves while writing them (an incorrect row-count assumption in a CA bundle test, a swapped Razorpay API field name) and fixed before the suite went green; neither was a code bug.
+
+## Phase 17 Pre-Launch Fixes
+
+### Admin panel security hardening
+**Bug**: All authenticated users could see the Admin nav group in the sidebar and navigate to `/admin/*` routes. Backend endpoints were already correctly role-gated (Phase 14), but the frontend had no role enforcement.
+
+**Fix**:
+- `GET /api/v1/me` — new endpoint (accessible to all authenticated users) that returns `{user_id, role}`. Used by the layout and admin guard.
+- `frontend/components/shell/sidebar.tsx` — Admin nav group is now hidden unless `userRole === 'admin'` (fetched from `/me` on every app load).
+- `frontend/app/(app)/admin/layout.tsx` — new Next.js nested layout that calls `/me` and renders "Not authorized" if the user isn't admin, so direct URL navigation to `/admin/*` is also blocked at the frontend level.
+- Backend enforcement (Phase 14): unchanged and still the authoritative gate — all `/admin/*` API endpoints return 403 for non-admin users regardless of what the frontend does.
+- **Test**: `tests/test_admin_role_enforcement.py` (7 tests) — verifies non-admin gets 403 on all admin endpoints and admin gets 200; uses real DB with disposable test users.
+- **DB migration**: `db/migrations/005_seed_admin_roles.sql` — sets `tejaspawar2811tej@gmail.com` to `role='admin'`. **Aniket's email was not found in the codebase — find it via `SELECT id, email FROM auth.users ORDER BY created_at;` in Supabase SQL editor, then run the commented-out INSERT in the migration file.**
+
+### Broker page UX — collapsible cards + search
+- `/brokers` now shows all broker cards collapsed by default (name + status + button only). Clicking "Connect"/"Manage" expands that card's instructions/form. Only one card open at a time. A search input filters all broker entries including coming-soon placeholders.
+- No content changes — same instructions, same forms, same callbacks.
+
+## Current test count: 148/148 passing
 
 ### Explicitly excluded from Phase 15.1, confirmed out of scope
 - **F&O P&L engine, Crypto/VDA tax engine** — deferred per prior project history: both were built against manual test data that will conflict with real broker data later; testing them now would test throwaway fixtures, not the real system.

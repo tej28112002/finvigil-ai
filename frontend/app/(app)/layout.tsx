@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Header } from "@/components/shell/header";
 import { Sidebar } from "@/components/shell/sidebar";
 import { createClient } from "@/lib/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 /**
  * Auth is guaranteed by middleware.ts before this layout renders.
@@ -18,6 +19,7 @@ export default function AppLayout({
 }) {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -29,6 +31,9 @@ export default function AppLayout({
         return;
       }
       setUserEmail(session.user.email ?? null);
+      apiFetch<{ user_id: string; role: string }>("/me")
+        .then((me) => setUserRole(me.role))
+        .catch(() => setUserRole("user"));
     });
 
     const {
@@ -52,7 +57,7 @@ export default function AppLayout({
     <div className="flex min-h-screen bg-bg">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-rule lg:block">
-        <Sidebar userEmail={userEmail} />
+        <Sidebar userEmail={userEmail} userRole={userRole} />
       </aside>
 
       {/* Mobile drawer */}
@@ -66,6 +71,7 @@ export default function AppLayout({
           <aside className="absolute inset-y-0 left-0 w-64 border-r border-rule shadow-xl">
             <Sidebar
               userEmail={userEmail}
+              userRole={userRole}
               onNavigate={() => setMenuOpen(false)}
             />
           </aside>
