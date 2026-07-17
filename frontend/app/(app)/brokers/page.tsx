@@ -33,25 +33,28 @@ interface CsvImportResult {
   errors: string[];
 }
 
-const LAST_SYNCED_KEY = "finvigil-last-synced-zerodha";
+function lastSyncedKey(brokerName: string): string {
+  return `finvigil-last-synced-${brokerName}`;
+}
 
-function readLastSynced(): string | null {
+function readLastSynced(brokerName: string): string | null {
   try {
-    return window.localStorage.getItem(LAST_SYNCED_KEY);
+    return window.localStorage.getItem(lastSyncedKey(brokerName));
   } catch {
     return null;
   }
 }
 
-function writeLastSynced() {
+function writeLastSynced(brokerName: string) {
   try {
-    window.localStorage.setItem(LAST_SYNCED_KEY, new Date().toISOString());
+    window.localStorage.setItem(lastSyncedKey(brokerName), new Date().toISOString());
   } catch {
     // non-fatal — just a display nicety
   }
 }
 
 const ZERODHA_CALLBACK_URL = `${process.env.NEXT_PUBLIC_API_URL}/brokers/zerodha/callback`;
+const UPSTOX_CALLBACK_URL = `${process.env.NEXT_PUBLIC_API_URL}/brokers/upstox/callback`;
 
 export default function BrokersPage() {
   return (
@@ -79,16 +82,33 @@ function BrokersPageInner() {
 
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<CsvImportResult | null>(null);
-  const [lastSynced, setLastSynced] = useState<string | null>(null);
+  const [zerodhaLastSynced, setZerodhaLastSynced] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
 
-  // BYOK credential form
+  // BYOK credential form (Zerodha)
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [submittingCredentials, setSubmittingCredentials] = useState(false);
   const [credentialsError, setCredentialsError] = useState<string | null>(null);
 
-  const [inProgressNotice, setInProgressNotice] = useState<string | null>(null);
+  // Upstox — same OAuth-redirect shape as Zerodha
+  const [upstoxSyncing, setUpstoxSyncing] = useState(false);
+  const [upstoxSyncResult, setUpstoxSyncResult] = useState<CsvImportResult | null>(null);
+  const [upstoxLastSynced, setUpstoxLastSynced] = useState<string | null>(null);
+  const [upstoxConnecting, setUpstoxConnecting] = useState(false);
+  const [upstoxApiKey, setUpstoxApiKey] = useState("");
+  const [upstoxApiSecret, setUpstoxApiSecret] = useState("");
+  const [submittingUpstoxCredentials, setSubmittingUpstoxCredentials] = useState(false);
+  const [upstoxCredentialsError, setUpstoxCredentialsError] = useState<string | null>(null);
+
+  // Groww — TOTP-based (no OAuth redirect; token is refreshed automatically on every sync)
+  const [growwSyncing, setGrowwSyncing] = useState(false);
+  const [growwSyncResult, setGrowwSyncResult] = useState<CsvImportResult | null>(null);
+  const [growwLastSynced, setGrowwLastSynced] = useState<string | null>(null);
+  const [growwApiKey, setGrowwApiKey] = useState("");
+  const [growwTotpSecret, setGrowwTotpSecret] = useState("");
+  const [submittingGrowwCredentials, setSubmittingGrowwCredentials] = useState(false);
+  const [growwCredentialsError, setGrowwCredentialsError] = useState<string | null>(null);
 
   const [csvUploading, setCsvUploading] = useState(false);
   const [csvResult, setCsvResult] = useState<CsvImportResult | null>(null);
@@ -110,7 +130,9 @@ function BrokersPageInner() {
       setBrokers(brokerList);
       setPortfolioValue(dashboard.total_equity_value);
       setHoldingsCount(portfolio.length);
-      setLastSynced(readLastSynced());
+      setZerodhaLastSynced(readLastSynced("zerodha"));
+      setUpstoxLastSynced(readLastSynced("upstox"));
+      setGrowwLastSynced(readLastSynced("groww"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load brokers");
     } finally {
@@ -128,8 +150,8 @@ function BrokersPageInner() {
     const zerodhaResult = searchParams.get("zerodha");
     if (zerodhaResult === "connected") {
       setCallbackNotice({ tone: "success", message: "Zerodha connected." });
-      writeLastSynced();
-      setLastSynced(readLastSynced());
+      writeLastSynced("zerodha");
+      setZerodhaLastSynced(readLastSynced("zerodha"));
       router.replace("/brokers");
       load();
     } else if (zerodhaResult === "error") {
@@ -142,7 +164,28 @@ function BrokersPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  // Same pattern for ?upstox=connected|error, left by /brokers/upstox/callback.
+  useEffect(() => {
+    const upstoxResult = searchParams.get("upstox");
+    if (upstoxResult === "connected") {
+      setCallbackNotice({ tone: "success", message: "Upstox connected." });
+      writeLastSynced("upstox");
+      setUpstoxLastSynced(readLastSynced("upstox"));
+      router.replace("/brokers");
+      load();
+    } else if (upstoxResult === "error") {
+      setCallbackNotice({
+        tone: "error",
+        message: searchParams.get("message") || "Could not connect Upstox.",
+      });
+      router.replace("/brokers");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const zerodha = brokers?.find((b) => b.broker_name === "zerodha") ?? null;
+  const upstox = brokers?.find((b) => b.broker_name === "upstox") ?? null;
+  const groww = brokers?.find((b) => b.broker_name === "groww") ?? null;
   const csvConn = brokers?.find((b) => b.broker_name === "csv") ?? null;
 
   async function handleSubmitCredentials(e: React.FormEvent) {
@@ -203,12 +246,124 @@ function BrokersPageInner() {
         { method: "POST" }
       );
       setSyncResult(result);
-      writeLastSynced();
-      setLastSynced(readLastSynced());
+      writeLastSynced("zerodha");
+      setZerodhaLastSynced(readLastSynced("zerodha"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");
     } finally {
       setSyncing(false);
+    }
+  }
+
+  async function handleSubmitUpstoxCredentials(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmittingUpstoxCredentials(true);
+    setUpstoxCredentialsError(null);
+    try {
+      const updated = await apiFetch<BrokerConnection>(
+        "/brokers/upstox/credentials",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_key: upstoxApiKey, api_secret: upstoxApiSecret }),
+        }
+      );
+      setBrokers((prev) => {
+        if (!prev) return [updated];
+        const withoutUpstox = prev.filter((b) => b.broker_name !== "upstox");
+        return [...withoutUpstox, updated];
+      });
+      setUpstoxApiKey("");
+      setUpstoxApiSecret("");
+    } catch (err) {
+      setUpstoxCredentialsError(
+        err instanceof Error ? err.message : "Could not save credentials"
+      );
+    } finally {
+      setSubmittingUpstoxCredentials(false);
+    }
+  }
+
+  async function handleConnectUpstox() {
+    setUpstoxConnecting(true);
+    setError(null);
+    try {
+      const { login_url } = await apiFetch<{ login_url: string }>(
+        "/brokers/upstox/login"
+      );
+      window.location.href = login_url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start connect");
+      setUpstoxConnecting(false);
+    }
+  }
+
+  async function handleSyncUpstoxNow() {
+    if (!upstox) return;
+    setUpstoxSyncing(true);
+    setUpstoxSyncResult(null);
+    setError(null);
+    try {
+      const result = await apiFetch<CsvImportResult>(
+        `/brokers/upstox/sync?broker_connection_id=${upstox.id}`,
+        { method: "POST" }
+      );
+      setUpstoxSyncResult(result);
+      writeLastSynced("upstox");
+      setUpstoxLastSynced(readLastSynced("upstox"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setUpstoxSyncing(false);
+    }
+  }
+
+  async function handleSubmitGrowwCredentials(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmittingGrowwCredentials(true);
+    setGrowwCredentialsError(null);
+    try {
+      const updated = await apiFetch<BrokerConnection>(
+        "/brokers/groww/credentials",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_key: growwApiKey, totp_secret: growwTotpSecret }),
+        }
+      );
+      setBrokers((prev) => {
+        if (!prev) return [updated];
+        const withoutGroww = prev.filter((b) => b.broker_name !== "groww");
+        return [...withoutGroww, updated];
+      });
+      setGrowwApiKey("");
+      setGrowwTotpSecret("");
+    } catch (err) {
+      setGrowwCredentialsError(
+        err instanceof Error ? err.message : "Could not save credentials"
+      );
+    } finally {
+      setSubmittingGrowwCredentials(false);
+    }
+  }
+
+  async function handleSyncGrowwNow() {
+    if (!groww) return;
+    setGrowwSyncing(true);
+    setGrowwSyncResult(null);
+    setError(null);
+    try {
+      const result = await apiFetch<CsvImportResult>(
+        `/brokers/groww/sync?broker_connection_id=${groww.id}`,
+        { method: "POST" }
+      );
+      setGrowwSyncResult(result);
+      writeLastSynced("groww");
+      setGrowwLastSynced(readLastSynced("groww"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setGrowwSyncing(false);
     }
   }
 
@@ -313,8 +468,8 @@ function BrokersPageInner() {
                   : zerodha?.has_credentials
                     ? "Credentials saved — not yet connected"
                     : "Not set up"}
-                {lastSynced && zerodha?.status === "active" && (
-                  <> · Last synced {new Date(lastSynced).toLocaleString("en-IN")}</>
+                {zerodhaLastSynced && zerodha?.status === "active" && (
+                  <> · Last synced {new Date(zerodhaLastSynced).toLocaleString("en-IN")}</>
                 )}
               </p>
             </div>
@@ -425,29 +580,238 @@ function BrokersPageInner() {
         )}
       </Card>
 
-      {/* Upstox / Groww — presentational only, no real backend yet */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {(["Upstox", "Groww"] as const).map((name) => (
-          <Card key={name} className="p-5">
-            <div className="flex items-center justify-between">
-              <p className="font-medium text-ink">{name}</p>
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  setInProgressNotice(
-                    `${name} integration is in progress — connecting here isn't available yet.`
-                  )
-                }
-              >
-                Connect
+      {/* Upstox — bring-your-own-key */}
+      <Card className="p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{
+                backgroundColor: upstox?.status === "active" ? "var(--gain)" : "var(--ink-faint)",
+              }}
+              aria-hidden="true"
+            />
+            <span
+              className="h-3 w-3 shrink-0 rounded-sm"
+              style={{ backgroundColor: "var(--color-broker-upstox)" }}
+              aria-hidden="true"
+            />
+            <div>
+              <p className="font-medium text-ink">Upstox</p>
+              <p className="text-xs text-ink-muted">
+                {upstox?.status === "active"
+                  ? "Connected"
+                  : upstox?.has_credentials
+                    ? "Credentials saved — not yet connected"
+                    : "Not set up"}
+                {upstoxLastSynced && upstox?.status === "active" && (
+                  <> · Last synced {new Date(upstoxLastSynced).toLocaleString("en-IN")}</>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {upstox?.status === "active" && (
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={handleConnectUpstox} loading={upstoxConnecting}>
+                Reconnect
+              </Button>
+              <Button onClick={handleSyncUpstoxNow} loading={upstoxSyncing}>
+                Sync now
               </Button>
             </div>
-            {inProgressNotice?.startsWith(name) && (
-              <p className="mt-2 text-xs text-ink-muted">{inProgressNotice}</p>
-            )}
-          </Card>
-        ))}
-      </div>
+          )}
+          {upstox?.has_credentials && upstox.status !== "active" && (
+            <Button onClick={handleConnectUpstox} loading={upstoxConnecting}>
+              Connect Upstox
+            </Button>
+          )}
+        </div>
+
+        {!upstox?.has_credentials && (
+          <div className="mt-4 rounded-md border border-rule bg-bg p-4 text-sm">
+            <p className="font-medium text-ink">Set up your own Upstox app</p>
+            <ol className="mt-3 list-decimal space-y-2 pl-4 text-ink-muted">
+              <li>
+                Go to{" "}
+                <a
+                  href="https://account.upstox.com/developer/apps"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-brand hover:text-brand-hover"
+                >
+                  account.upstox.com/developer/apps
+                </a>{" "}
+                and create a new app.
+              </li>
+              <li>
+                Set the app&apos;s <strong>Redirect URI</strong> to exactly:
+                <code className="mt-1 block break-all rounded bg-surface-raised px-2 py-1 text-xs">
+                  {UPSTOX_CALLBACK_URL}
+                </code>
+              </li>
+              <li>Copy the app&apos;s API key and API secret and paste them below.</li>
+            </ol>
+
+            <form onSubmit={handleSubmitUpstoxCredentials} className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="upstox-api-key" className="mb-1 block text-xs font-medium text-ink">
+                  API key
+                </label>
+                <input
+                  id="upstox-api-key"
+                  type="text"
+                  required
+                  value={upstoxApiKey}
+                  onChange={(e) => setUpstoxApiKey(e.target.value)}
+                  className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
+                  placeholder="Client ID"
+                />
+              </div>
+              <div>
+                <label htmlFor="upstox-api-secret" className="mb-1 block text-xs font-medium text-ink">
+                  API secret
+                </label>
+                <input
+                  id="upstox-api-secret"
+                  type="password"
+                  required
+                  autoComplete="off"
+                  value={upstoxApiSecret}
+                  onChange={(e) => setUpstoxApiSecret(e.target.value)}
+                  className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
+                  placeholder="Kept encrypted, never shown again"
+                />
+              </div>
+              {upstoxCredentialsError && (
+                <p className="text-sm text-loss" role="alert">{upstoxCredentialsError}</p>
+              )}
+              <Button type="submit" loading={submittingUpstoxCredentials}>
+                Save credentials
+              </Button>
+            </form>
+          </div>
+        )}
+
+        {upstoxSyncResult && (
+          <div className="mt-4 rounded-md border border-rule bg-bg p-3 text-sm text-ink-muted">
+            Synced: {upstoxSyncResult.imported} imported, {upstoxSyncResult.skipped} skipped
+            {upstoxSyncResult.errors.length > 0 && `, ${upstoxSyncResult.errors.length} errors`}.
+          </div>
+        )}
+      </Card>
+
+      {/* Groww — bring-your-own-key, TOTP-based (no OAuth redirect) */}
+      <Card className="p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{
+                backgroundColor: groww?.status === "active" ? "var(--gain)" : "var(--ink-faint)",
+              }}
+              aria-hidden="true"
+            />
+            <span
+              className="h-3 w-3 shrink-0 rounded-sm"
+              style={{ backgroundColor: "var(--color-broker-groww, #00d09c)" }}
+              aria-hidden="true"
+            />
+            <div>
+              <p className="font-medium text-ink">Groww</p>
+              <p className="text-xs text-ink-muted">
+                {groww?.status === "active"
+                  ? "Connected"
+                  : groww?.has_credentials
+                    ? "Credentials saved — sync to verify"
+                    : "Not set up"}
+                {growwLastSynced && groww?.status === "active" && (
+                  <> · Last synced {new Date(growwLastSynced).toLocaleString("en-IN")}</>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {groww?.has_credentials && (
+            <Button onClick={handleSyncGrowwNow} loading={growwSyncing}>
+              Sync now
+            </Button>
+          )}
+        </div>
+
+        {!groww?.has_credentials && (
+          <div className="mt-4 rounded-md border border-rule bg-bg p-4 text-sm">
+            <p className="font-medium text-ink">Set up your own Groww Trade API key</p>
+            <ol className="mt-3 list-decimal space-y-2 pl-4 text-ink-muted">
+              <li>
+                Go to{" "}
+                <a
+                  href="https://groww.in/trade-api"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-brand hover:text-brand-hover"
+                >
+                  groww.in/trade-api
+                </a>{" "}
+                and subscribe to the API plan.
+              </li>
+              <li>
+                From your Groww account, open Trade API settings and generate your API key.
+              </li>
+              <li>
+                Make sure TOTP is enabled on your account (Settings → Security), then copy
+                your TOTP secret from the Groww Trade API console.
+              </li>
+              <li>Paste both values below — no redirect URL is needed.</li>
+            </ol>
+
+            <form onSubmit={handleSubmitGrowwCredentials} className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="groww-api-key" className="mb-1 block text-xs font-medium text-ink">
+                  API key
+                </label>
+                <input
+                  id="groww-api-key"
+                  type="text"
+                  required
+                  value={growwApiKey}
+                  onChange={(e) => setGrowwApiKey(e.target.value)}
+                  className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
+                  placeholder="Your Groww API key"
+                />
+              </div>
+              <div>
+                <label htmlFor="groww-totp-secret" className="mb-1 block text-xs font-medium text-ink">
+                  TOTP secret
+                </label>
+                <input
+                  id="groww-totp-secret"
+                  type="password"
+                  required
+                  autoComplete="off"
+                  value={growwTotpSecret}
+                  onChange={(e) => setGrowwTotpSecret(e.target.value)}
+                  className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand"
+                  placeholder="Kept encrypted, never shown again"
+                />
+              </div>
+              {growwCredentialsError && (
+                <p className="text-sm text-loss" role="alert">{growwCredentialsError}</p>
+              )}
+              <Button type="submit" loading={submittingGrowwCredentials}>
+                Save credentials
+              </Button>
+            </form>
+          </div>
+        )}
+
+        {growwSyncResult && (
+          <div className="mt-4 rounded-md border border-rule bg-bg p-3 text-sm text-ink-muted">
+            Synced: {growwSyncResult.imported} imported, {growwSyncResult.skipped} skipped
+            {growwSyncResult.errors.length > 0 && `, ${growwSyncResult.errors.length} errors`}.
+          </div>
+        )}
+      </Card>
 
       {/* Angel One / Dhan / Kotak — coming soon, muted */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

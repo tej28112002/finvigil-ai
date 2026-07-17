@@ -1,6 +1,6 @@
 # FinVigil AI — Project Status
 
-## Completed Phases (37/45 — 82%)
+## Completed Phases (38/45 — 84%)
 Phase 1    Architecture Design
 Phase 2    Database Schema
 Phase 2.5  Supabase Deployment
@@ -40,8 +40,48 @@ Phase 12c  Razorpay real-credential integration (plan IDs, API keys, webhook sec
 Phase 10   Voice Journal Pipeline (Groq Whisper STT, fixed psychology taxonomy, text-entry fallback, cascade delete — FR-JRN-01 to 03)
 Phase 14   Admin Panel (role-based access: user/support/admin; user management; feature flags; scoped read-only impersonation + broker resync; full audit log — FR-ADM-01/02)
 Phase 12b  Celery + Redis (proactive grace-period downgrade + FR-HAR-03's daily 06:00 IST harvest job — see below)
+Phase 16   BYOK Broker Integrations (Zerodha, Upstox, Groww — see below)
 
-## Remaining Phases (8/45 — 18%)
+## Phase 16 — BYOK Broker Integrations (Zerodha, Upstox, Groww)
+
+All three brokers are now on a **bring-your-own-key (BYOK)** model. Each user creates their own developer app on their broker's console and submits their own credentials into FinVigil. This replaces the previous single shared Zerodha developer account (which only worked for users explicitly whitelisted on that one app) and extends the same per-user isolation to Upstox and Groww.
+
+### Credential storage model
+- `api_key` — stored as plain `VARCHAR(255)` on `broker_connections.api_key`. This is a client identifier, not a secret (matching how Kite Connect's own docs treat it).
+- `api_secret`, `access_token`, `totp_secret` — stored encrypted in Supabase Vault (`vault.create_secret` / `pgsodium` envelope encryption). Each is a separate Vault row, referenced by `api_secret_kms_id`, `access_token_kms_id`, `totp_secret_kms_id` columns on `broker_connections`.
+- Credential intake endpoint: `POST /brokers/{broker_name}/credentials` (generic, handled by `app/api/v1/broker.py`). Calls the relevant vault write for each field.
+
+### Per-broker auth flows
+
+**Zerodha** (`app/services/zerodha_service.py`, `app/api/v1/zerodha.py`):
+- OAuth redirect: `GET /brokers/zerodha/login` → user's own Kite Connect login URL → browser callback to `/brokers/zerodha/callback`.
+- Callback is NOT auth-gated (browser redirect can't carry an Authorization header). Security: signed `state` token (HMAC-SHA256, 10-min TTL) carries `user_id`, verified in `handle_callback`. See `app/core/oauth_state.py`.
+- Token refreshed on every daily login (Zerodha's access token expires daily).
+- Sync: `kite.trades()` — all executed trades for today in one call.
+
+**Upstox** (`app/services/upstox_service.py`, `app/api/v1/upstox.py`):
+- OAuth redirect, same shape as Zerodha: `/v2/login/authorization/dialog` → `/v2/login/authorization/token` (POST, form-urlencoded).
+- Uses `requests` directly (no official Python SDK).
+- Token expires daily at 3:30 AM IST.
+- `BACKEND_URL` config setting: Upstox requires the exact `redirect_uri` in BOTH the login URL and the token exchange call. The backend must know its own public URL. Set `BACKEND_URL` in `backend/.env` / Railway to match the deployed backend (e.g. `https://your-railway-app.railway.app/api/v1`). This mirrors `NEXT_PUBLIC_API_URL` on the frontend.
+- F&O detection: Upstox's `exchange` field is just `"NSE"` / `"BSE"` for all segments. Use `instrument_token.startswith(("NSE_FO", "BSE_FO"))` — the token prefix carries the actual segment.
+- Sync endpoint: `GET /v2/order/trades/get-trades-for-day`, response under `"data"` key, timestamp format `"%d-%b-%Y %H:%M:%S"`.
+
+**Groww** (`app/services/groww_service.py`, `app/api/v1/groww.py`):
+- No OAuth redirect — uses a TOTP-based token flow. No `/login` or `/callback` endpoints.
+- Credentials: `api_key` (sent as `Authorization: Bearer` header) + `totp_secret` (32-char base32 TOTP seed stored in Vault). TOTP code generated via `pyotp.TOTP(secret).now()`.
+- Token is refreshed automatically at the start of every sync call (`refresh_access_token` is called inside `sync_today_trades`). Token carries a daily expiry per Groww's own docs.
+- **No "trades for day" endpoint exists on Groww's API.** Only `GET /v1/order/list` (per segment: `CASH`, `FNO`) and `GET /v1/order/trades/{order_id}` (per order). Sync uses order list per segment and filters in Python to `order_status == "EXECUTED"` and `trade_date[:10] == today`. This avoids N+1 per-order API calls; the trade-off is that `average_fill_price` (order-level) is used instead of per-fill price, which can differ for partial fills that execute across multiple ticks.
+- `pyotp==2.9.0` added to `requirements.txt`.
+- Sync endpoint: `POST /brokers/groww/sync` (no login/callback endpoints at all).
+
+### Architecture notes
+- `BYOK_BROKERS = ["zerodha", "upstox", "groww"]` in `app/services/broker_service.py` — controls which brokers' `/credentials` calls are handled.
+- `/brokers/upstox/callback` is NOT auth-gated (same reason as Zerodha's callback — browser redirect from Upstox cannot carry an Authorization header). The signed `state` param provides security.
+- Tests: `tests/test_zerodha_service.py` (9), `tests/test_upstox_service.py` (9), `tests/test_groww_service.py` (11) — all 29 pass. All use in-memory fakes (no DB, no network — pyotp and requests are monkeypatched in Groww/Upstox tests).
+- Angel One is explicitly deferred. Its auth flow requires storing the user's trading PIN (not just an app secret), a materially bigger trust step that warrants its own design decision and BRD amendment.
+
+## Remaining Phases (7/45 — 16%)
 Phase 15   Testing + CA Validation
 Phase 16   Closed Beta
 Phase 17   Production Launch
@@ -127,7 +167,7 @@ Phase 17   Production Launch
 - Import get_assessment_year from app.core.tax_utils
 - pool_size=5, max_overflow=1 in session.py
 - All endpoints need Depends(get_current_user_id)
-  EXCEPT /brokers/zerodha/callback
+  EXCEPT /brokers/zerodha/callback and /brokers/upstox/callback (browser redirects — can't carry Authorization header; security via signed state token instead)
 
 ## Test Constants
 user_id = 765984b3-fd6b-4091-8d24-6808d8680b3a

@@ -25,6 +25,14 @@ class Settings:
     # frontend's own NEXT_PUBLIC_API_URL pointing the other direction.
     FRONTEND_URL: str = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
+    # Phase 16 -- this backend's own public base URL (including /api/v1),
+    # needed for brokers whose OAuth authorize step requires an exact
+    # redirect_uri to be embedded in both the login URL and the token
+    # exchange (Upstox). Must match NEXT_PUBLIC_API_URL, the frontend's
+    # equivalent pointing the other direction -- and must match the
+    # Redirect URI the user registers on their own broker app.
+    BACKEND_URL: str = os.environ.get("BACKEND_URL", "http://localhost:8000/api/v1")
+
     # Phase 12 — Razorpay billing. All empty until an admin sets up a
     # Razorpay account and pastes TEST-mode credentials here — see the
     # TODO comments in backend/.env. Never put live/production keys in

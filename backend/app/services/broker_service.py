@@ -5,8 +5,8 @@ from app.repositories.broker_connection_repository import BrokerConnectionReposi
 from app.repositories.vault_repository import VaultRepository
 
 # Brokers with a BYOK credential-intake flow (POST /brokers/{broker}/credentials).
-# Extend as Upstox/Groww land (Phase 16 sequencing: Zerodha -> Upstox -> Groww).
-BYOK_BROKERS = ["zerodha"]
+# Extend as Groww lands (Phase 16 sequencing: Zerodha -> Upstox -> Groww).
+BYOK_BROKERS = ["zerodha", "upstox", "groww"]
 
 
 class BrokerService:

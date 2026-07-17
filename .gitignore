@@ -221,3 +221,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Claude Code local tooling (per-machine dev-server launch config + worktree checkouts)
+.claude/
+
+# Generated FastAPI OpenAPI schema dump (regenerated from app.main:app on demand)
+backend/openapi.json
+
+# Stray duplicate doc, superseded by docs/project-context.md
+project-context.md.txt
