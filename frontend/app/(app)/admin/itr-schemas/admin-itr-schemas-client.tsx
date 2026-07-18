@@ -34,6 +34,7 @@ export function AdminItrSchemasClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [togglingAy, setTogglingAy] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
   const [ay, setAy] = useState("");
@@ -56,6 +57,9 @@ export function AdminItrSchemasClient() {
   }
 
   useEffect(() => {
+    apiFetch<{ role: string }>("/me")
+      .then((me) => setIsAdmin(me.role === "admin"))
+      .catch(() => setIsAdmin(false));
     loadSchemas();
   }, []);
 
@@ -127,12 +131,14 @@ export function AdminItrSchemasClient() {
             Add a new assessment year&apos;s CBDT field-name mapping here — no code change or deploy needed.
           </p>
         </div>
-        <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Cancel" : "Upload New Schema"}
-        </Button>
+        {isAdmin && (
+          <Button onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "Cancel" : "Upload New Schema"}
+          </Button>
+        )}
       </div>
 
-      {showForm && (
+      {isAdmin && showForm && (
         <Card className="mb-6 p-5">
           <h2 className="mb-4 font-display text-base text-ink">Upload schema mapping</h2>
           <div className="space-y-3">
@@ -219,14 +225,16 @@ export function AdminItrSchemasClient() {
                 </Td>
                 <Td className="text-ink-muted">{fmtDate(s.uploaded_at)}</Td>
                 <Td align="right">
-                  <Button
-                    variant="secondary"
-                    onClick={() => handleToggleActive(s)}
-                    loading={togglingAy === s.ay}
-                    className="h-7 px-3 text-xs"
-                  >
-                    {s.is_active ? "Deactivate" : "Activate"}
-                  </Button>
+                  {isAdmin && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleToggleActive(s)}
+                      loading={togglingAy === s.ay}
+                      className="h-7 px-3 text-xs"
+                    >
+                      {s.is_active ? "Deactivate" : "Activate"}
+                    </Button>
+                  )}
                 </Td>
               </Tr>
             ))}

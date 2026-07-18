@@ -84,6 +84,11 @@ class TestNonAdminBlocked:
         )
         assert res.status_code == 403
 
+    def test_schema_upload_blocked(self, db_test_user):
+        client = self._client_for(db_test_user["user_id"])
+        res = client.post("/api/v1/admin/itr-schemas", json={})
+        assert res.status_code == 403
+
 
 # ── Admin succeeds ────────────────────────────────────────────────────────────
 
@@ -113,3 +118,10 @@ class TestAdminAllowed:
         client = self._client_for(admin_test_user)
         res = client.get("/api/v1/admin/audit-logs")
         assert res.status_code == 200
+
+    def test_schema_upload_allowed(self, admin_test_user):
+        # FastAPI resolves auth dependency before parsing the body. Empty body →
+        # 422 (Pydantic validation failure) proves the admin passed auth cleanly.
+        client = self._client_for(admin_test_user)
+        res = client.post("/api/v1/admin/itr-schemas", json={})
+        assert res.status_code == 422
