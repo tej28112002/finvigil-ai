@@ -44,6 +44,7 @@ def build_real_service(db_session):
     instrument_repo = InstrumentRepository(db_session)
     tax_summary_repo = TaxSummaryRepository(db_session)
     ca_export_job_repo = CaExportJobRepository(db_session)
+    holding_lot_repo = HoldingLotRepository(db_session)
 
     itr3_service = ITR3ExportService(
         itr_schema_repository=ItrSchemaRepository(db_session),
@@ -62,7 +63,7 @@ def build_real_service(db_session):
         vault_repository=VaultRepository(db_session),
     )
     harvesting_service = HarvestingService(
-        holding_repository=HoldingLotRepository(db_session),
+        holding_repository=holding_lot_repo,
         realized_gain_repository=realized_gain_repo,
         price_service=price_service,
     )
@@ -74,10 +75,11 @@ def build_real_service(db_session):
         instrument_repository=instrument_repo,
         harvesting_service=harvesting_service,
         ca_export_job_repository=ca_export_job_repo,
+        holding_lot_repository=holding_lot_repo,
     ), uuid_module.UUID(PRIMARY_TEST_USER)
 
 
-def test_zip_contains_exactly_the_five_expected_files(db_session):
+def test_zip_contains_exactly_the_six_expected_files(db_session):
     service, user_id = build_real_service(db_session)
 
     zip_bytes = service.generate_bundle(user_id=user_id, assessment_year="2026-27")
@@ -90,6 +92,7 @@ def test_zip_contains_exactly_the_five_expected_files(db_session):
         "capital_gains_summary.json",
         "realized_gains.csv",
         "harvest_opportunities.json",
+        "holdings.csv",
         "README.txt",
     }
 
@@ -134,6 +137,36 @@ def test_itr3_schedules_json_matches_independently_verified_ltcg_total(db_sessio
     assert isinstance(schedule["LTCGBeforelowerB1B2112A"], int)
     # 2000 well under the 125000 exemption -> zero taxable balance.
     assert schedule["Balance112A"] == 0
+
+
+def test_holdings_csv_contains_open_reliance_lot(db_session):
+    """
+    holdings.csv must be present, have the right header, contain at least
+    one RELIANCE row, and have cost_basis_total = quantity_remaining * buy_price
+    for every row (verifies the math, not hardcoded DB quantities which vary
+    across test data seeds).
+    """
+    service, user_id = build_real_service(db_session)
+
+    zip_bytes = service.generate_bundle(user_id=user_id, assessment_year="2026-27")
+
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        csv_text = zf.read("holdings.csv").decode("utf-8")
+
+    lines = csv_text.strip().splitlines()
+    assert lines[0] == "symbol,isin,buy_date,quantity_remaining,buy_price,cost_basis_total,status"
+    reliance_rows = [r for r in lines[1:] if r.startswith("RELIANCE,")]
+    assert len(reliance_rows) >= 1
+
+    from decimal import Decimal
+    for row in lines[1:]:
+        parts = row.split(",")
+        qty = Decimal(parts[3])
+        price = Decimal(parts[4])
+        cost_basis = Decimal(parts[5])
+        assert cost_basis == qty * price, (
+            f"cost_basis_total mismatch: {cost_basis} != {qty} * {price} in row: {row}"
+        )
 
 
 def test_readme_and_capital_gains_summary_are_present_and_readable(db_session):

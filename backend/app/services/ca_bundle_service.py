@@ -8,6 +8,7 @@ from uuid import UUID
 
 from app.core.tax_utils import get_ay_date_range
 from app.repositories.ca_export_job_repository import CaExportJobRepository
+from app.repositories.holding_lot_repository import HoldingLotRepository
 from app.repositories.instrument_repository import InstrumentRepository
 from app.repositories.realized_gain_repository import RealizedGainRepository
 from app.services.harvesting_service import HarvestingService
@@ -17,6 +18,11 @@ from app.services.tax_export_service import TaxExportService
 _CSV_COLUMNS = [
     "symbol", "isin", "quantity_sold", "buy_date", "sell_date",
     "buy_price", "sell_price", "holding_days", "gain_type", "profit_loss",
+]
+
+_HOLDINGS_CSV_COLUMNS = [
+    "symbol", "isin", "buy_date", "quantity_remaining", "buy_price",
+    "cost_basis_total", "status",
 ]
 
 _INCOME_TYPES_FOR_CSV = ["equity_capital_gains", "crypto_vda"]
@@ -43,6 +49,7 @@ class CABundleService:
         instrument_repository: InstrumentRepository,
         harvesting_service: HarvestingService,
         ca_export_job_repository: CaExportJobRepository,
+        holding_lot_repository: HoldingLotRepository,
     ):
         self.itr3_export_service = itr3_export_service
         self.tax_export_service = tax_export_service
@@ -50,6 +57,7 @@ class CABundleService:
         self.instrument_repository = instrument_repository
         self.harvesting_service = harvesting_service
         self.ca_export_job_repository = ca_export_job_repository
+        self.holding_lot_repository = holding_lot_repository
 
     def generate_bundle(self, user_id: UUID, assessment_year: str) -> bytes:
         # Step 1 — ITR-3 schedules. Raises ItrSchemaNotFoundError (no
@@ -79,13 +87,18 @@ class CABundleService:
             user_id=user_id, assessment_year=assessment_year
         )
 
-        # Step 5 — README
+        # Step 5 — open holding lots (unsold positions) as CSV so the CA
+        # can verify cost basis continuity and identify pre-2018 lots that
+        # need the grandfathering clause applied manually.
+        holdings_csv = self._build_holdings_csv(user_id=user_id)
+
+        # Step 6 — README
         readme_text = self._build_readme(
             assessment_year=assessment_year,
             schema_version=itr3_result["schema_version"],
         )
 
-        # Step 6 — zip everything in memory
+        # Step 7 — zip everything in memory
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("itr3_schedules.json", json.dumps(itr3_result, indent=2))
@@ -95,10 +108,11 @@ class CABundleService:
             )
             zf.writestr("realized_gains.csv", realized_gains_csv)
             zf.writestr("harvest_opportunities.json", json.dumps(harvest_json, indent=2))
+            zf.writestr("holdings.csv", holdings_csv)
             zf.writestr("README.txt", readme_text)
         zip_bytes = buffer.getvalue()
 
-        # Step 7 — audit record for the bundle itself
+        # Step 8 — audit record for the bundle itself
         self.ca_export_job_repository.create_export_job(
             user_id=user_id,
             assessment_year=assessment_year,
@@ -153,6 +167,26 @@ class CABundleService:
             )
         return output.getvalue()
 
+    def _build_holdings_csv(self, user_id: UUID) -> str:
+        lots = self.holding_lot_repository.get_active_lots_by_user(user_id=user_id)
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(_HOLDINGS_CSV_COLUMNS)
+        for lot in lots:
+            instrument = lot.instrument
+            qty = Decimal(str(lot.quantity_remaining))
+            price = Decimal(str(lot.buy_price))
+            writer.writerow([
+                instrument.symbol if instrument else "UNKNOWN",
+                instrument.isin if instrument and instrument.isin else "",
+                lot.buy_date.date().isoformat(),
+                str(qty),
+                str(price),
+                str(qty * price),
+                lot.status,
+            ])
+        return output.getvalue()
+
     def _build_harvest_opportunities(self, user_id: UUID, assessment_year: str) -> dict:
         try:
             summary = self.harvesting_service.get_harvest_summary(
@@ -203,6 +237,7 @@ class CABundleService:
             f"- itr3_schedules.json: Upload this to ITR filing software for Schedule CG and VDA\n"
             f"- capital_gains_summary.json: Human-readable summary for your reference\n"
             f"- realized_gains.csv: Transaction-level detail for all capital gains\n"
+            f"- holdings.csv: Open lot positions (unsold shares) with cost basis\n"
             f"- harvest_opportunities.json: Tax-loss harvesting opportunities identified\n"
             f"\n"
             f"IMPORTANT: This bundle contains ONLY capital gains data. Personal details, "

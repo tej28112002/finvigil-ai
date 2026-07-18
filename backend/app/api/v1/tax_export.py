@@ -74,6 +74,7 @@ def get_ca_bundle_service(
             price_service=price_service,
         ),
         ca_export_job_repository=CaExportJobRepository(db),
+        holding_lot_repository=HoldingLotRepository(db),
     )
 
 
