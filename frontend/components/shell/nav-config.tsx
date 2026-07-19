@@ -43,7 +43,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: "Dashboard",
         href: "/dashboard",
-        description: "Your whole portfolio in one picture.",
+        description: "Your welcome screen and quick navigation.",
         icon: icon(
           <>
             <rect x="3" y="3" width="7" height="9" rx="1" />
@@ -54,9 +54,21 @@ export const NAV_GROUPS: NavGroup[] = [
         ),
       },
       {
-        label: "Portfolio",
+        label: "AI Journaling",
+        href: "/journal",
+        description: "Voice notes on your trades — recorded, transcribed, searchable.",
+        icon: icon(
+          <>
+            <rect x="9" y="2" width="6" height="12" rx="3" />
+            <path d="M5 10a7 7 0 0 0 14 0" />
+            <path d="M12 19v3" />
+          </>
+        ),
+      },
+      {
+        label: "Cross Broker Portfolio",
         href: "/portfolio",
-        description: "Every open lot, FIFO cost basis, per instrument.",
+        description: "Invested amount, P&L, XIRR and holdings across all brokers.",
         icon: icon(
           <>
             <path d="M12 2 2 7l10 5 10-5-10-5Z" />
@@ -66,60 +78,7 @@ export const NAV_GROUPS: NavGroup[] = [
         ),
       },
       {
-        label: "Tax summary",
-        href: "/tax",
-        description: "STCG, LTCG, F&O and crypto — one tax picture.",
-        icon: icon(
-          <>
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z" />
-            <path d="M14 2v6h6" />
-            <path d="m9 16 6-6" />
-            <circle cx="9.5" cy="10.5" r="0.5" fill="currentColor" />
-            <circle cx="14.5" cy="15.5" r="0.5" fill="currentColor" />
-          </>
-        ),
-      },
-      {
-        label: "AIS reconciliation",
-        href: "/ais",
-        description:
-          "Upload your Annual Information Statement and match it against your FinVigil data.",
-        icon: icon(
-          <>
-            <path d="M9 11l3 3L22 4" />
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-          </>
-        ),
-      },
-    ],
-  },
-  {
-    label: "Analysis",
-    items: [
-      {
-        label: "F&O P&L",
-        href: "/fno",
-        description: "Futures & options as business income, matched FIFO.",
-        icon: icon(
-          <>
-            <path d="M3 3v18h18" />
-            <path d="m7 14 4-4 3 3 5-6" />
-          </>
-        ),
-      },
-      {
-        label: "Crypto",
-        href: "/crypto",
-        description: "VDA gains at 30% flat, TDS credits tracked.",
-        icon: icon(
-          <>
-            <circle cx="12" cy="12" r="9" />
-            <path d="M9.5 8.5h4a1.75 1.75 0 0 1 0 3.5h-4m0 0h4.5a1.75 1.75 0 0 1 0 3.5H9.5M11 6.5v11" />
-          </>
-        ),
-      },
-      {
-        label: "Tax harvesting",
+        label: "Tax Harvesting",
         href: "/harvesting",
         description:
           "Find losing positions to sell before March 31 and offset gains — cuts your tax bill legally.",
@@ -133,7 +92,7 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Tools",
+    label: "Portfolio Backtesting",
     items: [
       {
         label: "Replay",
@@ -160,8 +119,61 @@ export const NAV_GROUPS: NavGroup[] = [
           </>
         ),
       },
+    ],
+  },
+  {
+    label: "Analysis",
+    items: [
       {
-        label: "CA export",
+        label: "Tax Summary",
+        href: "/tax",
+        description: "STCG, LTCG, F&O and crypto — one tax picture.",
+        icon: icon(
+          <>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z" />
+            <path d="M14 2v6h6" />
+            <path d="m9 16 6-6" />
+            <circle cx="9.5" cy="10.5" r="0.5" fill="currentColor" />
+            <circle cx="14.5" cy="15.5" r="0.5" fill="currentColor" />
+          </>
+        ),
+      },
+      {
+        label: "AIS Reconciliation",
+        href: "/ais",
+        description:
+          "Upload your Annual Information Statement and match it against your FinVigil data.",
+        icon: icon(
+          <>
+            <path d="M9 11l3 3L22 4" />
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+          </>
+        ),
+      },
+      {
+        label: "F&O P&L",
+        href: "/fno",
+        description: "Futures & options as business income, matched FIFO.",
+        icon: icon(
+          <>
+            <path d="M3 3v18h18" />
+            <path d="m7 14 4-4 3 3 5-6" />
+          </>
+        ),
+      },
+      {
+        label: "Crypto",
+        href: "/crypto",
+        description: "VDA gains at 30% flat, TDS credits tracked.",
+        icon: icon(
+          <>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M9.5 8.5h4a1.75 1.75 0 0 1 0 3.5h-4m0 0h4.5a1.75 1.75 0 0 1 0 3.5H9.5M11 6.5v11" />
+          </>
+        ),
+      },
+      {
+        label: "CA Export",
         href: "/export",
         description: "A capital-gains report your CA can actually use.",
         icon: icon(
@@ -169,19 +181,6 @@ export const NAV_GROUPS: NavGroup[] = [
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <path d="M7 10l5 5 5-5" />
             <path d="M12 15V3" />
-          </>
-        ),
-      },
-      {
-        label: "Journal",
-        href: "/journal",
-        description:
-          "Voice notes on your trades — recorded, transcribed, searchable.",
-        icon: icon(
-          <>
-            <rect x="9" y="2" width="6" height="12" rx="3" />
-            <path d="M5 10a7 7 0 0 0 14 0" />
-            <path d="M12 19v3" />
           </>
         ),
       },

@@ -1,7 +1,5 @@
-import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/ui/empty-state";
 import { apiFetchServer, getServerToken } from "@/lib/api-server";
-import { PortfolioTable } from "@/app/(app)/portfolio/portfolio-table";
+import { PortfolioClient } from "@/app/(app)/portfolio/portfolio-client";
 
 interface PortfolioItem {
   instrument_id: string; symbol: string; name: string;
@@ -13,44 +11,29 @@ interface HoldingLot {
   id: string; instrument_id: string; quantity_bought: string;
   quantity_remaining: string; buy_price: string; buy_date: string; status: string;
 }
+interface BrokerConnection { id: string; broker_name: string; status: string; }
+interface DashboardData { total_equity_value: string; total_crypto_value: string; }
 
 export default async function PortfolioPage() {
   const token = await getServerToken();
-  const [portfolio, holdings] = await Promise.all([
+  const [portfolio, holdings, brokers, dashboard] = await Promise.all([
     apiFetchServer<PortfolioItem[]>("/portfolio/", token),
     apiFetchServer<HoldingLot[]>("/holdings/", token),
+    apiFetchServer<BrokerConnection[]>("/brokers/", token),
+    apiFetchServer<DashboardData>("/dashboard/", token),
   ]);
-
-  const items = portfolio ?? [];
-
-  if (items.length === 0) {
-    return (
-      <div className="mx-auto max-w-5xl">
-        <EmptyState
-          icon={
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 2 2 7l10 5 10-5-10-5Z" />
-              <path d="m2 17 10 5 10-5" />
-            </svg>
-          }
-          title="No holdings yet"
-          description="Connect a broker or import a tradebook to see your open positions here."
-          action={<a href="/brokers" className="inline-flex h-9 items-center rounded-md bg-brand px-4 text-sm font-medium text-brand-fg">Connect a broker</a>}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-4 flex items-center gap-2">
-        <Badge tone="estimate">Cost basis only</Badge>
-        <p className="text-xs text-ink-faint">
-          Live per-holding price is pending — figures below are quantity and
-          invested cost, not current market value.
-        </p>
-      </div>
-      <PortfolioTable items={items} lots={holdings ?? []} />
+      <h1 className="font-display mb-6 text-2xl font-bold text-ink">
+        Cross Broker Portfolio
+      </h1>
+      <PortfolioClient
+        portfolio={portfolio ?? []}
+        holdings={holdings ?? []}
+        brokers={brokers ?? []}
+        totalEquityValue={dashboard?.total_equity_value ?? null}
+      />
     </div>
   );
 }
