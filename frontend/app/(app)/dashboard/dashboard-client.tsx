@@ -1,156 +1,129 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, MetricLabel } from "@/components/ui/card";
-import { Money } from "@/components/ui/money";
-import { BrokerChips } from "@/components/dashboard/broker-chips";
-import { TaxMeterCard } from "@/components/dashboard/tax-meter-card";
-import { TaxHealthScore } from "@/components/dashboard/tax-health-score";
-import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
-import { HoldingsTable } from "@/components/dashboard/holdings-table";
-import { onboarding } from "@/lib/onboarding";
+import Link from "next/link";
+import { Card } from "@/components/ui/card";
 
-interface BrokerConnection { id: string; broker_name: string; status: string; }
-interface PortfolioItem {
-  instrument_id: string; symbol: string; instrument_type: string;
-  total_quantity: string; average_buy_price: string; total_invested: string;
-}
-interface HoldingLot { instrument_id: string; broker_connection_id: string; }
-interface FnoPosition { instrument_id: string; symbol: string; open_quantity: string; avg_buy_price: string; }
-interface Step { label: string; done: boolean; href: string; cta: string; }
-interface DashboardData { day_pnl: string; unrealized_pnl: string; }
+const QUICK_NAV = [
+  {
+    title: "AI Journaling",
+    desc: "Record trade notes and import your tradebook",
+    href: "/journal",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="9" y="2" width="6" height="12" rx="3" />
+        <path d="M5 10a7 7 0 0 0 14 0" />
+        <path d="M12 19v3" />
+      </svg>
+    ),
+  },
+  {
+    title: "Cross Broker Portfolio",
+    desc: "Invested amount, P&L, XIRR and holdings across all brokers",
+    href: "/portfolio",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 2 2 7l10 5 10-5-10-5Z" />
+        <path d="m2 17 10 5 10-5" />
+        <path d="m2 12 10 5 10-5" />
+      </svg>
+    ),
+  },
+  {
+    title: "Tax Harvesting",
+    desc: "Find tax-loss opportunities before year end",
+    href: "/harvesting",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+        <path d="M2 21c0-3 1.85-5.36 5.08-6" />
+      </svg>
+    ),
+  },
+  {
+    title: "Portfolio Backtesting",
+    desc: "Replay your trades and run Monte Carlo simulations",
+    href: "/replay",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 12a9 9 0 1 0 9-9" />
+        <path d="M3 4v5h5" />
+        <path d="M12 8v4l3 2" />
+      </svg>
+    ),
+  },
+  {
+    title: "CA Export",
+    desc: "Download your ITR-3 bundle for your chartered accountant",
+    href: "/export",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <path d="M7 10l5 5 5-5" />
+        <path d="M12 15V3" />
+      </svg>
+    ),
+  },
+];
 
-export function DashboardClient({
-  brokers, portfolio, holdings, fnoPositions,
-  checklistSteps, dashboard, totalPaise,
-  dayTone, unrealTone, portfolioEmpty,
-  equityTax, cryptoNetTax, fnoPnl, assessmentYear,
-  taxHealthScore, harvestCandidateCount,
+export function WelcomeScreen({
+  userId,
+  firstName,
 }: {
-  brokers: BrokerConnection[];
-  portfolio: PortfolioItem[];
-  holdings: HoldingLot[];
-  fnoPositions: FnoPosition[];
-  checklistSteps: Step[];
-  dashboard: DashboardData;
-  totalPaise: string;
-  dayTone: -1 | 0 | 1;
-  unrealTone: -1 | 0 | 1;
-  portfolioEmpty: boolean;
-  equityTax: string | null;
-  cryptoNetTax: string | null;
-  fnoPnl: string | null;
-  assessmentYear: string;
-  taxHealthScore: number;
-  harvestCandidateCount: number;
+  userId: string;
+  firstName: string;
 }) {
-  const [brokerFilter, setBrokerFilter] = useState<string | null>(null);
-
-  // localStorage is unavailable during SSR, so these must default to false
-  // on the first client render (matching the server) and only pick up the
-  // real value after mount — reading them directly during render would
-  // desync the client's first paint from the server HTML and trigger a
-  // hydration mismatch on every element that follows the checklist.
-  const [clientFlags, setClientFlags] = useState({
-    visitedTax: false,
-    exportedCA: false,
-  });
+  // localStorage is unavailable during SSR. Default null so we don't render
+  // the greeting on the server (no hydration mismatch), then pick up the
+  // real first-vs-return state after mount.
+  const [isFirstVisit, setIsFirstVisit] = useState<boolean | null>(null);
 
   useEffect(() => {
-    setClientFlags({
-      visitedTax: onboarding.hasVisitedTax(),
-      exportedCA: onboarding.hasExportedCA(),
-    });
-  }, []);
+    if (!userId) return;
+    const key = `finvigil_seen_${userId}`;
+    const seen = !!localStorage.getItem(key);
+    setIsFirstVisit(!seen);
+    if (!seen) {
+      localStorage.setItem(key, "1");
+    }
+  }, [userId]);
 
-  const steps = checklistSteps.map((s) => {
-    if (s.href === "/tax") return { ...s, done: clientFlags.visitedTax };
-    if (s.href === "/export") return { ...s, done: clientFlags.exportedCA };
-    return s;
-  });
+  const greeting =
+    isFirstVisit === null
+      ? `Hello, ${firstName}!`
+      : isFirstVisit
+        ? `Welcome, ${firstName}!`
+        : `Welcome back, ${firstName}!`;
 
   return (
-    <>
-      <BrokerChips brokers={brokers} selected={brokerFilter} onSelect={setBrokerFilter} />
-
-      {portfolioEmpty && (
-        <Card className="border-brand-soft bg-brand-soft/40 p-5">
-          <p className="font-display text-lg text-ink">Connect your broker</p>
-          <p className="mt-1 text-sm text-ink-muted">
-            Link Zerodha or import a tradebook to see your consolidated
-            portfolio and tax picture here.
-          </p>
-          <Button onClick={() => (window.location.href = "/brokers")} className="mt-3">
-            Go to Brokers
-          </Button>
-        </Card>
-      )}
-
-      {/* Row 1 — hero metrics. Total portfolio value spans 2 of 4 columns at
-          lg: it's the biggest number on the page (size="xl" statement
-          numerals) and was overflowing its card when it had to share an
-          equal 1/5 slot with four smaller-font cards in a single row. Day
-          P&L / Unrealized P&L keep the same 1-column width they always had
-          (this grid is still 4 columns at lg, same as before Tax Health
-          Score existed) — only Total Portfolio Value got wider, nothing
-          else got narrower. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="p-5 lg:col-span-2">
-          <MetricLabel>Total portfolio value</MetricLabel>
-          <div className="mt-3">
-            <Money value={BigInt(totalPaise)} size="xl" />
-          </div>
-          <p className="mt-2 text-xs text-ink-faint">Across all connected brokers</p>
-        </Card>
-
-        <Card className="p-5">
-          <MetricLabel>Day P&amp;L</MetricLabel>
-          <div className="mt-3">
-            <Money value={dashboard.day_pnl} size="lg" tone="auto" signed />
-          </div>
-          {dayTone === 0 && (
-            <p className="mt-2 text-xs text-ink-faint">Live prices resume on next broker sync</p>
-          )}
-        </Card>
-
-        <Card className="p-5">
-          <MetricLabel>Unrealized P&amp;L</MetricLabel>
-          <div className="mt-3">
-            <Money value={dashboard.unrealized_pnl} size="lg" tone="auto" signed />
-          </div>
-          {unrealTone === 0 && (
-            <p className="mt-2 text-xs text-ink-faint">Based on last available prices</p>
-          )}
-        </Card>
-      </div>
-
-      {/* Row 2 — tax metrics. A separate, wider 2-column row (not squeezed
-          into row 1) so both cards get a full half-width slot instead of a
-          cramped 1/5 or 1/6. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TaxMeterCard
-          equityTax={equityTax}
-          cryptoNetTax={cryptoNetTax}
-          fnoPnl={fnoPnl}
-          assessmentYear={assessmentYear}
-        />
-
-        <TaxHealthScore score={taxHealthScore} candidateCount={harvestCandidateCount} />
-      </div>
-
-      <OnboardingChecklist steps={steps} />
-
+    <div className="mx-auto max-w-5xl space-y-10">
+      {/* Greeting */}
       <div>
-        <h2 className="font-display mb-3 text-lg text-ink">Holdings</h2>
-        <HoldingsTable
-          portfolio={portfolio}
-          holdings={holdings}
-          brokers={brokers}
-          fnoPositions={fnoPositions}
-          brokerFilter={brokerFilter}
-        />
+        <h1 className="font-display text-4xl font-bold text-ink">{greeting}</h1>
+        <p className="mt-2 text-base text-ink-muted">
+          Your portfolio intelligence platform for smarter tax and investment decisions.
+        </p>
       </div>
-    </>
+
+      {/* Quick-nav cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {QUICK_NAV.map((card) => (
+          <Link key={card.href} href={card.href} className="group block">
+            <Card
+              interactive
+              className="flex h-full flex-col gap-3 p-5 transition-shadow"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-soft text-brand">
+                {card.icon}
+              </div>
+              <div>
+                <p className="font-medium text-ink">{card.title}</p>
+                <p className="mt-1 text-sm text-ink-muted">{card.desc}</p>
+              </div>
+            </Card>
+          </Link>
+        ))}
+      </div>
+    </div>
   );
 }
