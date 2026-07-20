@@ -39,7 +39,7 @@ export function Sidebar({
 
       {/* Nav groups */}
       <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Main">
-        {NAV_GROUPS.filter((g) => g.label !== "Admin" || userRole === "admin").map((group) => {
+        {NAV_GROUPS.filter((g) => !g.adminOnly || userRole === "admin").map((group) => {
           const isCollapsed = collapsed[group.label] ?? false;
           return (
             <div key={group.label} className="mb-5">

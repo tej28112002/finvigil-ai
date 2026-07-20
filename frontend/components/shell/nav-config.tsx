@@ -16,6 +16,8 @@ export interface NavItem {
 export interface NavGroup {
   label: string;
   items: NavItem[];
+  /** When true, the sidebar hides this group for non-admin users. */
+  adminOnly?: boolean;
 }
 
 function icon(paths: React.ReactNode) {
@@ -227,6 +229,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "Admin",
+    adminOnly: true,
     items: [
       {
         label: "Dashboard",
