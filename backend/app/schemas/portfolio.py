@@ -5,6 +5,15 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class XirrResponse(BaseModel):
+    xirr: float | None
+    xirr_percent: float | None
+    alpha: float | None
+    alpha_percent: float | None
+    beta: float | None
+    benchmark: str
+
+
 class PortfolioItemResponse(BaseModel):
     instrument_id: UUID
     symbol: str
