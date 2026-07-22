@@ -20,6 +20,7 @@ interface HoldingLot {
   quantity_remaining: string; buy_price: string; buy_date: string; status: string;
 }
 interface BrokerConnection { id: string; broker_name: string; status: string; }
+interface TopHolding { symbol: string; weight: number; instrument_type: string; }
 interface XirrData {
   xirr: number | null;
   xirr_percent: number | null;
@@ -27,7 +28,25 @@ interface XirrData {
   alpha_percent: number | null;
   beta: number | null;
   benchmark: string;
+  absolute_return_percent: number | null;
+  cagr_percent: number | null;
+  asset_allocation: Record<string, number> | null;
+  top_holdings: TopHolding[] | null;
+  volatility_percent: number | null;
+  max_drawdown_percent: number | null;
+  sharpe_ratio: number | null;
+  sortino_ratio: number | null;
+  var_95_rupees: number | null;
 }
+
+const TYPE_LABELS: Record<string, string> = {
+  equity: "Equity",
+  fno: "F&O",
+  mf: "Mutual Funds",
+  crypto: "Crypto",
+};
+
+const ALLOCATION_BAR_COLORS = ["bg-brand", "bg-estimate", "bg-ink-muted", "bg-rule-strong"];
 
 function pctColor(value: number | null | undefined): string {
   if (value === null || value === undefined) return "text-ink-faint";
@@ -40,6 +59,82 @@ function pctStr(value: number | null | undefined, signed = true): string {
   if (value === null || value === undefined) return "—";
   const prefix = signed && value > 0 ? "+" : "";
   return `${prefix}${value.toFixed(2)}%`;
+}
+
+function MetricSkeleton() {
+  return <div className="h-8 w-24 animate-pulse rounded bg-rule" />;
+}
+
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span title={text} className="cursor-help text-ink-faint" aria-label="Info">
+      {" "}ⓘ
+    </span>
+  );
+}
+
+/** A return-style metric: colored by sign (positive=gain, negative=loss). */
+function ReturnCard({
+  label,
+  value,
+  loading,
+  subtitle,
+}: {
+  label: React.ReactNode;
+  value: number | null;
+  loading: boolean;
+  subtitle: string;
+}) {
+  return (
+    <Card className="p-5">
+      <MetricLabel>{label}</MetricLabel>
+      <div className="mt-3">
+        {loading ? <MetricSkeleton /> : (
+          <span className={`font-mono text-2xl font-medium ${pctColor(value)}`}>
+            {pctStr(value)}
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-xs text-ink-faint">{loading ? "Loading…" : subtitle}</p>
+    </Card>
+  );
+}
+
+/** A risk/ratio-style metric: no sign coloring, always neutral ink, with an
+ * explanatory tooltip since these aren't self-evidently "good" or "bad". */
+function RatioCard({
+  label,
+  value,
+  loading,
+  tooltip,
+  subtitle,
+  format,
+}: {
+  label: string;
+  value: number | null;
+  loading: boolean;
+  tooltip: string;
+  subtitle: string;
+  format: (v: number) => string;
+}) {
+  return (
+    <Card className="p-5">
+      <MetricLabel>
+        {label}
+        <InfoTip text={tooltip} />
+      </MetricLabel>
+      <div className="mt-3">
+        {loading ? (
+          <MetricSkeleton />
+        ) : value !== null ? (
+          <span className="font-mono text-2xl font-medium text-ink">{format(value)}</span>
+        ) : (
+          <span className="font-mono text-2xl font-medium text-ink-faint">—</span>
+        )}
+      </div>
+      <p className="mt-1 text-xs text-ink-faint">{loading ? "Loading…" : subtitle}</p>
+    </Card>
+  );
 }
 
 export function PortfolioClient({
@@ -77,16 +172,31 @@ export function PortfolioClient({
 
   const xirrPct = xirrData?.xirr_percent ?? null;
   const alphaPct = xirrData?.alpha_percent ?? null;
-  const betaPct = xirrData?.beta ?? null;
-  const loadingDash = xirrLoading ? "—" : undefined;
+  const betaVal = xirrData?.beta ?? null;
+  const absoluteReturnPct = xirrData?.absolute_return_percent ?? null;
+  const cagrPct = xirrData?.cagr_percent ?? null;
+  const volatilityPct = xirrData?.volatility_percent ?? null;
+  const maxDrawdownPct = xirrData?.max_drawdown_percent ?? null;
+  const sharpe = xirrData?.sharpe_ratio ?? null;
+  const sortino = xirrData?.sortino_ratio ?? null;
+  const var95Paise =
+    xirrData?.var_95_rupees != null ? BigInt(Math.round(xirrData.var_95_rupees * 100)) : null;
+
+  const assetAllocation = xirrData?.asset_allocation ?? null;
+  const allocationEntries = assetAllocation
+    ? Object.entries(assetAllocation)
+        .filter(([, pct]) => pct > 0)
+        .sort((a, b) => b[1] - a[1])
+    : [];
+  const topHoldings = xirrData?.top_holdings ?? null;
 
   return (
     <>
       {/* A — Broker filter tabs */}
       <BrokerChips brokers={brokers} selected={brokerFilter} onSelect={setBrokerFilter} />
 
-      {/* B — Metrics row (6 cards, 3-per-row on desktop) */}
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* SECTION 1 — Returns */}
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {/* Invested Amount */}
         <Card className="p-5">
           <MetricLabel>Invested Amount</MetricLabel>
@@ -122,74 +232,180 @@ export function PortfolioClient({
           </div>
         </Card>
 
+        {/* Absolute Return % */}
+        <ReturnCard
+          label="Absolute Return"
+          value={absoluteReturnPct}
+          loading={xirrLoading}
+          subtitle={absoluteReturnPct !== null ? "Total return, unannualised" : "Not enough trade history"}
+        />
+
+        {/* CAGR */}
+        <ReturnCard
+          label="CAGR"
+          value={cagrPct}
+          loading={xirrLoading}
+          subtitle={cagrPct !== null ? "Compound annual growth rate" : "Need 30+ days of history"}
+        />
+      </div>
+
+      {/* SECTION 2 — Risk & Performance */}
+      <h2 className="mt-8 font-display text-lg text-ink">Risk &amp; Performance</h2>
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* XIRR */}
-        <Card className="p-5">
-          <MetricLabel>XIRR</MetricLabel>
-          <div className="mt-3">
-            <span className={`font-mono text-2xl font-medium ${pctColor(xirrPct)}`}>
-              {loadingDash ?? pctStr(xirrPct)}
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-ink-faint">
-            {xirrLoading
-              ? "Loading…"
-              : xirrPct !== null
-                ? "Annualised return (XIRR)"
-                : "Not enough trade history"}
-          </p>
-        </Card>
+        <ReturnCard
+          label="XIRR"
+          value={xirrPct}
+          loading={xirrLoading}
+          subtitle={xirrPct !== null ? "Annualised return (XIRR)" : "Not enough trade history"}
+        />
 
         {/* Alpha */}
-        <Card className="p-5">
-          <MetricLabel>
-            Alpha{" "}
-            {xirrData && (
-              <span className="font-normal text-ink-faint">
-                vs {xirrData.benchmark}
-              </span>
-            )}
-          </MetricLabel>
-          <div className="mt-3">
-            <span className={`font-mono text-2xl font-medium ${pctColor(alphaPct)}`}>
-              {loadingDash ?? pctStr(alphaPct)}
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-ink-faint">
-            {xirrLoading
-              ? "Loading…"
-              : alphaPct !== null
-                ? `vs ${xirrData?.benchmark ?? "Nifty 50"}`
-                : "Benchmark data unavailable"}
-          </p>
-        </Card>
+        <ReturnCard
+          label={
+            <>
+              Alpha{" "}
+              {xirrData && <span className="font-normal text-ink-faint">vs {xirrData.benchmark}</span>}
+            </>
+          }
+          value={alphaPct}
+          loading={xirrLoading}
+          subtitle={alphaPct !== null ? `vs ${xirrData?.benchmark ?? "Nifty 50"}` : "Benchmark data unavailable"}
+        />
 
         {/* Beta */}
+        <RatioCard
+          label="Beta (β)"
+          value={betaVal}
+          loading={xirrLoading}
+          tooltip="How much your portfolio moves vs Nifty 50. 1.2 means 20% more volatile than the market."
+          subtitle={betaVal !== null ? "vs Nifty 50 (β)" : "Need 30+ days of daily price data"}
+          format={(v) => v.toFixed(2)}
+        />
+
+        {/* Volatility */}
+        <RatioCard
+          label="Volatility"
+          value={volatilityPct}
+          loading={xirrLoading}
+          tooltip="Annualized standard deviation of daily returns. Higher means more price swings."
+          subtitle={volatilityPct !== null ? "Annualised, of daily returns" : "Need 30+ days of daily price data"}
+          format={(v) => `${v.toFixed(2)}%`}
+        />
+
+        {/* Sharpe Ratio */}
+        <RatioCard
+          label="Sharpe Ratio"
+          value={sharpe}
+          loading={xirrLoading}
+          tooltip="Return earned per unit of total risk. Above 1 is good, above 2 is excellent."
+          subtitle={sharpe !== null ? "Risk-adjusted return" : "Need XIRR and volatility"}
+          format={(v) => v.toFixed(2)}
+        />
+
+        {/* Sortino Ratio */}
+        <RatioCard
+          label="Sortino Ratio"
+          value={sortino}
+          loading={xirrLoading}
+          tooltip="Like Sharpe but only counts downside risk. More relevant for investors."
+          subtitle={sortino !== null ? "Downside-adjusted return" : "Need 30+ days of daily price data"}
+          format={(v) => v.toFixed(2)}
+        />
+
+        {/* Max Drawdown */}
+        <RatioCard
+          label="Max Drawdown"
+          value={maxDrawdownPct}
+          loading={xirrLoading}
+          tooltip="Largest peak-to-trough loss you experienced. Lower is better."
+          subtitle={maxDrawdownPct !== null ? "Worst peak-to-trough decline" : "Need 30+ days of daily price data"}
+          format={(v) => `${v.toFixed(2)}%`}
+        />
+
+        {/* VaR 95% */}
         <Card className="p-5">
           <MetricLabel>
-            Beta (β){" "}
-            <span
-              title="Beta requires daily historical prices for each holding. This will be available once broker live price sync is connected."
-              className="cursor-help text-ink-faint"
-              aria-label="Info"
-            >
-              ⓘ
-            </span>
+            VaR (95%)
+            <InfoTip text="On 95% of trading days, your single-day loss will not exceed this amount." />
           </MetricLabel>
           <div className="mt-3">
-            {betaPct !== null ? (
-              <span
-                className="font-mono text-2xl font-medium text-ink"
-                title="A Beta > 1 means your portfolio moves more than the market. Beta < 1 means it moves less."
-              >
-                {betaPct.toFixed(2)}
-              </span>
+            {xirrLoading ? (
+              <MetricSkeleton />
+            ) : var95Paise !== null ? (
+              <Money value={var95Paise} size="lg" />
             ) : (
               <span className="font-mono text-2xl font-medium text-ink-faint">—</span>
             )}
           </div>
           <p className="mt-1 text-xs text-ink-faint">
-            {betaPct !== null ? "vs Nifty 50 (β)" : "Need 30+ days of data"}
+            {xirrLoading ? "Loading…" : var95Paise !== null ? "Worst-case single-day loss" : "Need 30+ days of daily price data"}
           </p>
+        </Card>
+      </div>
+
+      {/* SECTION 3 — Composition */}
+      <h2 className="mt-8 font-display text-lg text-ink">Composition</h2>
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Asset Allocation */}
+        <Card className="p-5">
+          <MetricLabel>Asset Allocation</MetricLabel>
+          <div className="mt-4 space-y-3">
+            {xirrLoading ? (
+              [0, 1, 2].map((i) => (
+                <div key={i} className="h-4 animate-pulse rounded bg-rule" />
+              ))
+            ) : allocationEntries.length > 0 ? (
+              allocationEntries.map(([type, pct], i) => (
+                <div key={type}>
+                  <div className="mb-1 flex items-center justify-between text-xs">
+                    <span className="text-ink-muted">{TYPE_LABELS[type] ?? type}</span>
+                    <span className="font-mono text-ink">{pct.toFixed(1)}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-rule">
+                    <div
+                      className={`h-full rounded-full ${ALLOCATION_BAR_COLORS[i % ALLOCATION_BAR_COLORS.length]}`}
+                      style={{ width: `${Math.min(pct, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-ink-faint">No active holdings yet</p>
+            )}
+          </div>
+        </Card>
+
+        {/* Top Holdings */}
+        <Card className="p-5">
+          <MetricLabel>Top Holdings</MetricLabel>
+          <div className="mt-4 space-y-3">
+            {xirrLoading ? (
+              [0, 1, 2].map((i) => (
+                <div key={i} className="h-4 animate-pulse rounded bg-rule" />
+              ))
+            ) : topHoldings && topHoldings.length > 0 ? (
+              topHoldings.map((h, i) => (
+                <div key={h.symbol}>
+                  <div className="mb-1 flex items-center justify-between text-xs">
+                    <span className="text-ink-muted">
+                      {i + 1}. {h.symbol}{" "}
+                      <span className="text-ink-faint">({TYPE_LABELS[h.instrument_type] ?? h.instrument_type})</span>
+                    </span>
+                    <span className="font-mono text-ink">{h.weight.toFixed(1)}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-rule">
+                    <div
+                      className="h-full rounded-full bg-brand"
+                      style={{ width: `${Math.min(h.weight, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-ink-faint">No active holdings yet</p>
+            )}
+          </div>
         </Card>
       </div>
 
