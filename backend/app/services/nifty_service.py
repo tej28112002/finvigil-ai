@@ -10,9 +10,12 @@ round-trips.  No Redis — an in-process dict is sufficient.
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import date, timedelta
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 
 # Module-level cache: key -> (unix_timestamp, xirr_or_None)
 _NIFTY_CACHE: dict[str, tuple[float, float | None]] = {}
@@ -133,7 +136,10 @@ class NiftyService:
             _NIFTY_CACHE[cache_key] = (time.time(), result)
             return result
 
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                f"nifty_service failed in get_nifty_xirr: {type(e).__name__}: {e}"
+            )
             return None
 
     def _get_cached_prices(
@@ -148,18 +154,33 @@ class NiftyService:
             if time.time() - ts < _CACHE_TTL:
                 return cached
 
-        import yfinance as yf
+        try:
+            import yfinance as yf
 
-        hist = yf.Ticker(ticker).history(
-            start=str(start), end=str(end + timedelta(days=1))
-        )
-        if hist.empty or "Close" not in hist.columns:
+            hist = yf.Ticker(ticker).history(
+                start=str(start), end=str(end + timedelta(days=1))
+            )
+            if hist.empty or "Close" not in hist.columns:
+                logger.warning(
+                    f"nifty_service._get_cached_prices({ticker}): empty history "
+                    f"or no Close column returned"
+                )
+                _PRICE_CACHE[cache_key] = (time.time(), None)
+                return None
+
+            prices = {
+                idx.date(): Decimal(str(row["Close"])) for idx, row in hist.iterrows()
+            }
+            _PRICE_CACHE[cache_key] = (time.time(), prices)
+            return prices
+
+        except Exception as e:
+            logger.warning(
+                f"nifty_service failed in _get_cached_prices({ticker}): "
+                f"{type(e).__name__}: {e}"
+            )
             _PRICE_CACHE[cache_key] = (time.time(), None)
             return None
-
-        prices = {idx.date(): Decimal(str(row["Close"])) for idx, row in hist.iterrows()}
-        _PRICE_CACHE[cache_key] = (time.time(), prices)
-        return prices
 
     def _build_daily_series(
         self, user_id, lots: list, trades: list
@@ -265,7 +286,10 @@ class NiftyService:
             _PORTFOLIO_SERIES_CACHE[cache_key] = (time.time(), result)
             return result
 
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                f"nifty_service failed in _build_daily_series: {type(e).__name__}: {e}"
+            )
             return None
 
     def _build_daily_portfolio_returns(
@@ -288,41 +312,55 @@ class NiftyService:
             return None
         portfolio_values, nifty_values = series
 
-        port_returns = [
-            (portfolio_values[i] - portfolio_values[i - 1]) / portfolio_values[i - 1]
-            for i in range(1, len(portfolio_values))
-            if portfolio_values[i - 1] != 0
-        ]
-        nifty_returns = [
-            (nifty_values[i] - nifty_values[i - 1]) / nifty_values[i - 1]
-            for i in range(1, len(nifty_values))
-            if nifty_values[i - 1] != 0
-        ]
-        n = min(len(port_returns), len(nifty_returns))
-        if n < 30:
+        try:
+            port_returns = [
+                (portfolio_values[i] - portfolio_values[i - 1]) / portfolio_values[i - 1]
+                for i in range(1, len(portfolio_values))
+                if portfolio_values[i - 1] != 0
+            ]
+            nifty_returns = [
+                (nifty_values[i] - nifty_values[i - 1]) / nifty_values[i - 1]
+                for i in range(1, len(nifty_values))
+                if nifty_values[i - 1] != 0
+            ]
+            n = min(len(port_returns), len(nifty_returns))
+            if n < 30:
+                return None
+            port_returns, nifty_returns = port_returns[:n], nifty_returns[:n]
+
+            import numpy as np
+
+            cov_matrix = np.cov(port_returns, nifty_returns)
+            covariance = cov_matrix[0][1]
+            nifty_variance = np.var(nifty_returns)
+            if nifty_variance == 0:
+                return None
+
+            return float(covariance / nifty_variance)
+
+        except Exception as e:
+            logger.warning(
+                f"nifty_service failed in compute_beta: {type(e).__name__}: {e}"
+            )
             return None
-        port_returns, nifty_returns = port_returns[:n], nifty_returns[:n]
-
-        import numpy as np
-
-        cov_matrix = np.cov(port_returns, nifty_returns)
-        covariance = cov_matrix[0][1]
-        nifty_variance = np.var(nifty_returns)
-        if nifty_variance == 0:
-            return None
-
-        return float(covariance / nifty_variance)
 
     def compute_volatility(self, user_id, lots: list, trades: list) -> float | None:
         daily_returns = self._build_daily_portfolio_returns(user_id, lots, trades)
         if daily_returns is None:
             return None
 
-        import numpy as np
+        try:
+            import numpy as np
 
-        daily_std = np.std(daily_returns)
-        annualized = daily_std * np.sqrt(252)
-        return float(annualized * 100)
+            daily_std = np.std(daily_returns)
+            annualized = daily_std * np.sqrt(252)
+            return float(annualized * 100)
+
+        except Exception as e:
+            logger.warning(
+                f"nifty_service failed in compute_volatility: {type(e).__name__}: {e}"
+            )
+            return None
 
     def compute_max_drawdown(self, user_id, lots: list, trades: list) -> float | None:
         series = self._build_daily_series(user_id, lots, trades)
@@ -330,17 +368,24 @@ class NiftyService:
             return None
         portfolio_values, _ = series
 
-        peak = portfolio_values[0]
-        max_drawdown = 0.0
-        for value in portfolio_values:
-            if value > peak:
-                peak = value
-            if peak > 0:
-                drawdown = (peak - value) / peak
-                if drawdown > max_drawdown:
-                    max_drawdown = drawdown
+        try:
+            peak = portfolio_values[0]
+            max_drawdown = 0.0
+            for value in portfolio_values:
+                if value > peak:
+                    peak = value
+                if peak > 0:
+                    drawdown = (peak - value) / peak
+                    if drawdown > max_drawdown:
+                        max_drawdown = drawdown
 
-        return float(max_drawdown * 100)
+            return float(max_drawdown * 100)
+
+        except Exception as e:
+            logger.warning(
+                f"nifty_service failed in compute_max_drawdown: {type(e).__name__}: {e}"
+            )
+            return None
 
     def compute_sharpe(
         self, user_id, lots: list, trades: list, xirr_percent: float | None
@@ -350,10 +395,17 @@ class NiftyService:
         fraction XirrService.compute_xirr_and_alpha returns."""
         if xirr_percent is None:
             return None
-        volatility = self.compute_volatility(user_id, lots, trades)
-        if volatility is None or volatility == 0:
+        try:
+            volatility = self.compute_volatility(user_id, lots, trades)
+            if volatility is None or volatility == 0:
+                return None
+            return float((xirr_percent - self.INDIA_RISK_FREE_RATE) / volatility)
+
+        except Exception as e:
+            logger.warning(
+                f"nifty_service failed in compute_sharpe: {type(e).__name__}: {e}"
+            )
             return None
-        return float((xirr_percent - self.INDIA_RISK_FREE_RATE) / volatility)
 
     def compute_sortino(
         self, user_id, lots: list, trades: list, xirr_percent: float | None
@@ -365,17 +417,24 @@ class NiftyService:
         if daily_returns is None:
             return None
 
-        downside_returns = [r for r in daily_returns if r < 0]
-        if len(downside_returns) < 5:
+        try:
+            downside_returns = [r for r in daily_returns if r < 0]
+            if len(downside_returns) < 5:
+                return None
+
+            import numpy as np
+
+            downside_deviation = float(np.std(downside_returns) * np.sqrt(252) * 100)
+            if downside_deviation == 0:
+                return None
+
+            return float((xirr_percent - self.INDIA_RISK_FREE_RATE) / downside_deviation)
+
+        except Exception as e:
+            logger.warning(
+                f"nifty_service failed in compute_sortino: {type(e).__name__}: {e}"
+            )
             return None
-
-        import numpy as np
-
-        downside_deviation = float(np.std(downside_returns) * np.sqrt(252) * 100)
-        if downside_deviation == 0:
-            return None
-
-        return float((xirr_percent - self.INDIA_RISK_FREE_RATE) / downside_deviation)
 
     def compute_var_95(
         self, user_id, lots: list, trades: list, current_value: float | None
@@ -386,7 +445,14 @@ class NiftyService:
         if current_value is None or current_value == 0:
             return None
 
-        import numpy as np
+        try:
+            import numpy as np
 
-        var_pct = np.percentile(daily_returns, 5)
-        return float(abs(var_pct) * current_value)
+            var_pct = np.percentile(daily_returns, 5)
+            return float(abs(var_pct) * current_value)
+
+        except Exception as e:
+            logger.warning(
+                f"nifty_service failed in compute_var_95: {type(e).__name__}: {e}"
+            )
+            return None
