@@ -10,12 +10,9 @@ round-trips.  No Redis — an in-process dict is sufficient.
 
 from __future__ import annotations
 
-import logging
 import time
 from datetime import date, timedelta
 from decimal import Decimal
-
-logger = logging.getLogger(__name__)
 
 # Module-level cache: key -> (unix_timestamp, xirr_or_None)
 _NIFTY_CACHE: dict[str, tuple[float, float | None]] = {}
@@ -137,8 +134,9 @@ class NiftyService:
             return result
 
         except Exception as e:
-            logger.warning(
-                f"nifty_service failed in get_nifty_xirr: {type(e).__name__}: {e}"
+            print(
+                f"[FINVIGIL] nifty_service failed in get_nifty_xirr: {type(e).__name__}: {e}",
+                flush=True,
             )
             return None
 
@@ -161,9 +159,10 @@ class NiftyService:
                 start=str(start), end=str(end + timedelta(days=1))
             )
             if hist.empty or "Close" not in hist.columns:
-                logger.warning(
-                    f"nifty_service._get_cached_prices({ticker}): empty history "
-                    f"or no Close column returned"
+                print(
+                    f"[FINVIGIL] nifty_service._get_cached_prices({ticker}): empty "
+                    f"history or no Close column returned",
+                    flush=True,
                 )
                 _PRICE_CACHE[cache_key] = (time.time(), None)
                 return None
@@ -175,9 +174,10 @@ class NiftyService:
             return prices
 
         except Exception as e:
-            logger.warning(
-                f"nifty_service failed in _get_cached_prices({ticker}): "
-                f"{type(e).__name__}: {e}"
+            print(
+                f"[FINVIGIL] nifty_service failed in _get_cached_prices({ticker}): "
+                f"{type(e).__name__}: {e}",
+                flush=True,
             )
             _PRICE_CACHE[cache_key] = (time.time(), None)
             return None
@@ -287,8 +287,10 @@ class NiftyService:
             return result
 
         except Exception as e:
-            logger.warning(
-                f"nifty_service failed in _build_daily_series: {type(e).__name__}: {e}"
+            print(
+                f"[FINVIGIL] nifty_service failed in _build_daily_series: "
+                f"{type(e).__name__}: {e}",
+                flush=True,
             )
             return None
 
@@ -339,8 +341,9 @@ class NiftyService:
             return float(covariance / nifty_variance)
 
         except Exception as e:
-            logger.warning(
-                f"nifty_service failed in compute_beta: {type(e).__name__}: {e}"
+            print(
+                f"[FINVIGIL] nifty_service failed in compute_beta: {type(e).__name__}: {e}",
+                flush=True,
             )
             return None
 
@@ -357,8 +360,10 @@ class NiftyService:
             return float(annualized * 100)
 
         except Exception as e:
-            logger.warning(
-                f"nifty_service failed in compute_volatility: {type(e).__name__}: {e}"
+            print(
+                f"[FINVIGIL] nifty_service failed in compute_volatility: "
+                f"{type(e).__name__}: {e}",
+                flush=True,
             )
             return None
 
@@ -382,8 +387,10 @@ class NiftyService:
             return float(max_drawdown * 100)
 
         except Exception as e:
-            logger.warning(
-                f"nifty_service failed in compute_max_drawdown: {type(e).__name__}: {e}"
+            print(
+                f"[FINVIGIL] nifty_service failed in compute_max_drawdown: "
+                f"{type(e).__name__}: {e}",
+                flush=True,
             )
             return None
 
@@ -402,8 +409,9 @@ class NiftyService:
             return float((xirr_percent - self.INDIA_RISK_FREE_RATE) / volatility)
 
         except Exception as e:
-            logger.warning(
-                f"nifty_service failed in compute_sharpe: {type(e).__name__}: {e}"
+            print(
+                f"[FINVIGIL] nifty_service failed in compute_sharpe: {type(e).__name__}: {e}",
+                flush=True,
             )
             return None
 
@@ -431,8 +439,10 @@ class NiftyService:
             return float((xirr_percent - self.INDIA_RISK_FREE_RATE) / downside_deviation)
 
         except Exception as e:
-            logger.warning(
-                f"nifty_service failed in compute_sortino: {type(e).__name__}: {e}"
+            print(
+                f"[FINVIGIL] nifty_service failed in compute_sortino: "
+                f"{type(e).__name__}: {e}",
+                flush=True,
             )
             return None
 
@@ -452,7 +462,8 @@ class NiftyService:
             return float(abs(var_pct) * current_value)
 
         except Exception as e:
-            logger.warning(
-                f"nifty_service failed in compute_var_95: {type(e).__name__}: {e}"
+            print(
+                f"[FINVIGIL] nifty_service failed in compute_var_95: {type(e).__name__}: {e}",
+                flush=True,
             )
             return None
