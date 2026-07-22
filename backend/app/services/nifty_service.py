@@ -203,6 +203,10 @@ class NiftyService:
         any unexpected error (network, empty history, etc).
         """
         if not lots or not trades:
+            print(
+                "[FINVIGIL] daily_series early return: no lots or no trades",
+                flush=True,
+            )
             return None
 
         cache_key = f"series_{user_id}_{len(trades)}"
@@ -214,11 +218,21 @@ class NiftyService:
         try:
             dated_trades = [t for t in trades if t.instrument is not None]
             if not dated_trades:
+                print(
+                    "[FINVIGIL] daily_series early return: no trades with "
+                    "instrument data",
+                    flush=True,
+                )
                 return None
 
             earliest = min(t.execution_time.date() for t in dated_trades)
             today = date.today()
             if (today - earliest).days < 30:
+                print(
+                    f"[FINVIGIL] daily_series early return: range < 30 days "
+                    f"(earliest={earliest}, today={today})",
+                    flush=True,
+                )
                 return None
 
             symbols = sorted({t.instrument.symbol for t in dated_trades})
@@ -229,11 +243,20 @@ class NiftyService:
                     price_series[symbol] = prices
 
             if not price_series:
+                print(
+                    "[FINVIGIL] daily_series early return: no price series "
+                    "(all ticker downloads failed or empty)",
+                    flush=True,
+                )
                 _PORTFOLIO_SERIES_CACHE[cache_key] = (time.time(), None)
                 return None
 
             nifty_prices = self._get_cached_prices("^NSEI", earliest, today)
             if not nifty_prices:
+                print(
+                    "[FINVIGIL] daily_series early return: no Nifty price series",
+                    flush=True,
+                )
                 _PORTFOLIO_SERIES_CACHE[cache_key] = (time.time(), None)
                 return None
 
@@ -279,10 +302,21 @@ class NiftyService:
                 nifty_values.append(float(nifty_price))
 
             if len(portfolio_values) < 30:
+                print(
+                    f"[FINVIGIL] daily_series early return: < 30 valid points "
+                    f"(got {len(portfolio_values)})",
+                    flush=True,
+                )
                 _PORTFOLIO_SERIES_CACHE[cache_key] = (time.time(), None)
                 return None
 
             result = (portfolio_values, nifty_values)
+            print(
+                f"[FINVIGIL] daily_series built: len={len(portfolio_values)} "
+                f"first={portfolio_values[0] if portfolio_values else None} "
+                f"last={portfolio_values[-1] if portfolio_values else None}",
+                flush=True,
+            )
             _PORTFOLIO_SERIES_CACHE[cache_key] = (time.time(), result)
             return result
 
@@ -301,12 +335,28 @@ class NiftyService:
         if series is None:
             return None
         portfolio_values, _ = series
-        returns = [
+        daily_returns = [
             (portfolio_values[i] - portfolio_values[i - 1]) / portfolio_values[i - 1]
             for i in range(1, len(portfolio_values))
             if portfolio_values[i - 1] != 0
         ]
-        return returns if len(returns) >= 30 else None
+
+        if len(daily_returns) < 30:
+            print(
+                f"[FINVIGIL] daily_series early return: < 30 valid points "
+                f"(got {len(daily_returns)} returns)",
+                flush=True,
+            )
+            return None
+
+        print(
+            f"[FINVIGIL] daily_series built: "
+            f"len={len(daily_returns)} "
+            f"first={daily_returns[0] if daily_returns else None} "
+            f"last={daily_returns[-1] if daily_returns else None}",
+            flush=True,
+        )
+        return daily_returns
 
     def compute_beta(self, user_id, lots: list, trades: list) -> float | None:
         series = self._build_daily_series(user_id, lots, trades)

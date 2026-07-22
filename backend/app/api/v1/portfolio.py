@@ -151,6 +151,16 @@ def get_portfolio_xirr(
         print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
         var_95 = None
 
+    print(
+        f"[FINVIGIL] xirr response: "
+        f"xirr={xirr} alpha={alpha} beta={beta} "
+        f"vol={volatility} mdd={max_drawdown} "
+        f"sharpe={sharpe} sortino={sortino} "
+        f"var={var_95} abs_ret={absolute_return} "
+        f"cagr={cagr} alloc={asset_allocation}",
+        flush=True,
+    )
+
     return XirrResponse(
         xirr=xirr,
         xirr_percent=xirr_percent,
