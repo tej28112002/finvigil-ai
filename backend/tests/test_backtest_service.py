@@ -48,7 +48,11 @@ def test_run_backtest_with_no_gains_in_range_returns_insufficient_data():
 
 
 def test_run_backtest_with_equity_gains_returns_completed_net_profit():
-    """+1000, +500, -200 -> net_profit = 1300.0, total_trades = 3."""
+    """
+    +1000, +500, -200 -> overall_profit = 1300.0, total_trades = 3,
+    win_pct = 2/3 * 100 = 66.67. Also verifies the richer result shape:
+    yearly_returns is a list and trades has one row per gain with a P&L.
+    """
     gains = [
         FakeGain(gain_type="STCG", profit_loss=Decimal("1000"), sell_date=datetime(2024, 3, 1)),
         FakeGain(gain_type="STCG", profit_loss=Decimal("500"), sell_date=datetime(2024, 3, 2)),
@@ -62,5 +66,9 @@ def test_run_backtest_with_equity_gains_returns_completed_net_profit():
     result = _service(gains).run_backtest(strategy, uuid4())
 
     assert result["status"] == "completed"
-    assert result["summary"]["net_profit"] == 1300.0
+    assert result["summary"]["overall_profit"] == 1300.0
     assert result["summary"]["total_trades"] == 3
+    assert abs(result["summary"]["win_pct"] - 66.67) < 0.01
+    assert isinstance(result["yearly_returns"], list)
+    assert len(result["trades"]) == 3
+    assert result["trades"][0]["pnl"] is not None
