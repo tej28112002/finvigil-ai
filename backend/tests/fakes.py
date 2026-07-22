@@ -51,6 +51,9 @@ class FakeHoldingLotRepository:
     def get_active_lots_by_user(self, user_id) -> list[FakeLot]:
         return self.lots
 
+    def get_by_user(self, user_id) -> list[FakeLot]:
+        return self.lots
+
     def get_open_lots_before_date(self, user_id, instrument_id, before_date) -> list[FakeLot]:
         return [lot for lot in self.lots if lot.buy_date < before_date]
 
@@ -101,6 +104,23 @@ class FakeRealizedGainRepository:
         # scoped to its own income_type, same as the real repository's
         # SQL WHERE clause.
         return [g for g in self.gains if g.income_type == income_type]
+
+    def get_by_user(self, user_id) -> list[FakeGain]:
+        return self.gains
+
+
+@dataclass
+class FakeDashboardProjection:
+    """Stands in for app.models.dashboard_projection.DashboardProjection."""
+    total_equity_value: Decimal
+
+
+class FakeDashboardRepository:
+    def __init__(self, projection: FakeDashboardProjection | None = None):
+        self.projection = projection
+
+    def get_by_user(self, user_id):
+        return self.projection
 
 
 class FakeTaxSummaryRepository:

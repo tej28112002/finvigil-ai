@@ -16,6 +16,7 @@ from uuid import UUID
 
 from app.repositories.dashboard_repository import DashboardRepository
 from app.repositories.holding_lot_repository import HoldingLotRepository
+from app.repositories.realized_gain_repository import RealizedGainRepository
 from app.repositories.trade_repository import TradeRepository
 from app.services.nifty_service import NiftyService
 
@@ -52,11 +53,13 @@ class XirrService:
         holding_repository: HoldingLotRepository,
         dashboard_repository: DashboardRepository,
         nifty_service: NiftyService,
+        realized_gain_repository: RealizedGainRepository | None = None,
     ):
         self.trade_repo = trade_repository
         self.holding_repo = holding_repository
         self.dashboard_repo = dashboard_repository
         self.nifty_service = nifty_service
+        self.realized_gain_repo = realized_gain_repository
 
     def _build_trade_cashflows(self, user_id: UUID) -> list[tuple[date, Decimal]]:
         """BUY trades → negative amounts; SELL trades → positive amounts.
@@ -124,3 +127,120 @@ class XirrService:
         alpha = (xirr - nifty_xirr) if nifty_xirr is not None else None
 
         return xirr, alpha
+
+    def get_current_value(self, user_id: UUID) -> float | None:
+        """Public float wrapper around _get_current_equity_value, for callers
+        outside this service (e.g. the API layer) that need the raw rupee
+        value without reaching into a private method."""
+        val = self._get_current_equity_value(user_id)
+        return float(val) if val > Decimal("0") else None
+
+    def _get_total_invested(self, user_id: UUID) -> Decimal:
+        """Reconstructs total capital ever deployed at original cost basis:
+        what's still held (quantity_remaining across every lot, open or
+        closed) plus what was already sold (quantity_sold * buy_price from
+        realized_gains). Closed lots contribute 0 via quantity_remaining, so
+        their cost basis only shows up through the realized_gains side."""
+        all_lots = self.holding_repo.get_by_user(user_id)
+        lots_total = sum(
+            (
+                Decimal(str(lot.quantity_remaining)) * Decimal(str(lot.buy_price))
+                for lot in all_lots
+            ),
+            Decimal("0"),
+        )
+        realized_gains = self.realized_gain_repo.get_by_user(user_id)
+        realized_total = sum(
+            (
+                Decimal(str(rg.quantity_sold)) * Decimal(str(rg.buy_price))
+                for rg in realized_gains
+            ),
+            Decimal("0"),
+        )
+        return lots_total + realized_total
+
+    def compute_absolute_return(self, user_id: UUID) -> float | None:
+        invested = self._get_total_invested(user_id)
+        if invested == Decimal("0"):
+            return None
+
+        current_value = self._get_current_equity_value(user_id)
+        realized_gains = self.realized_gain_repo.get_by_user(user_id)
+        realized_total = sum(
+            (Decimal(str(rg.profit_loss)) for rg in realized_gains), Decimal("0")
+        )
+        total_current = current_value + realized_total
+
+        return float((total_current - invested) / invested * 100)
+
+    def compute_cagr(self, user_id: UUID) -> float | None:
+        all_lots = self.holding_repo.get_by_user(user_id)
+        if not all_lots:
+            return None
+
+        earliest_buy_date = min(lot.buy_date for lot in all_lots).date()
+        years = (date.today() - earliest_buy_date).days / 365.0
+        if years < 0.1:
+            return None
+
+        invested = self._get_total_invested(user_id)
+        if invested == Decimal("0"):
+            return None
+
+        current_value = self._get_current_equity_value(user_id)
+        ratio = float(current_value) / float(invested)
+        if ratio < 0:
+            return None
+
+        cagr = ratio ** (1.0 / years) - 1
+        return float(cagr * 100)
+
+    def compute_asset_allocation(self, user_id: UUID) -> dict[str, float] | None:
+        lots = self.holding_repo.get_active_lots_by_user(user_id)
+        if not lots:
+            return None
+
+        totals: dict[str, Decimal] = {}
+        total_invested = Decimal("0")
+        for lot in lots:
+            itype = lot.instrument.instrument_type
+            amount = Decimal(str(lot.quantity_remaining)) * Decimal(str(lot.buy_price))
+            totals[itype] = totals.get(itype, Decimal("0")) + amount
+            total_invested += amount
+
+        if total_invested == Decimal("0"):
+            return None
+
+        return {k: float(v / total_invested * 100) for k, v in totals.items()}
+
+    def compute_concentration(self, user_id: UUID) -> list[dict] | None:
+        lots = self.holding_repo.get_active_lots_by_user(user_id)
+        if not lots:
+            return None
+
+        by_symbol: dict[str, dict] = {}
+        total_invested = Decimal("0")
+        for lot in lots:
+            symbol = lot.instrument.symbol
+            amount = Decimal(str(lot.quantity_remaining)) * Decimal(str(lot.buy_price))
+            if symbol not in by_symbol:
+                by_symbol[symbol] = {
+                    "invested": Decimal("0"),
+                    "instrument_type": lot.instrument.instrument_type,
+                }
+            by_symbol[symbol]["invested"] += amount
+            total_invested += amount
+
+        if total_invested == Decimal("0"):
+            return None
+
+        rows = [
+            {
+                "symbol": symbol,
+                "weight": float(data["invested"] / total_invested * 100),
+                "instrument_type": data["instrument_type"],
+            }
+            for symbol, data in by_symbol.items()
+        ]
+        rows.sort(key=lambda r: r["weight"], reverse=True)
+        return rows[:5]
