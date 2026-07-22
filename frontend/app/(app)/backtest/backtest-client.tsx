@@ -95,16 +95,51 @@ interface EquityPoint {
   date: string;
   cumulative_pnl: number;
   daily_pnl: number;
+  drawdown: number;
 }
 interface BacktestSummary {
-  net_profit: number;
-  win_rate_pct: number;
-  profit_factor: number | null;
-  expectancy: number;
-  max_drawdown_pct: number;
-  sharpe_ratio: number | null;
+  overall_profit: number;
   total_trades: number;
-  total_days: number;
+  avg_profit_per_trade: number;
+  win_pct: number;
+  loss_pct: number;
+  avg_profit_on_winning: number;
+  avg_loss_on_losing: number;
+  max_profit_single_trade: number;
+  max_loss_single_trade: number;
+  max_drawdown: number;
+  max_drawdown_pct: number;
+  max_drawdown_duration_days: number;
+  max_drawdown_start: string | null;
+  max_drawdown_end: string | null;
+  return_over_max_dd: number | null;
+  reward_to_risk_ratio: number | null;
+  expectancy_ratio: number;
+  max_win_streak: number;
+  max_losing_streak: number;
+  sharpe_ratio: number | null;
+}
+interface YearlyReturn {
+  year: number;
+  jan: number | null; feb: number | null; mar: number | null; apr: number | null;
+  may: number | null; jun: number | null; jul: number | null; aug: number | null;
+  sep: number | null; oct: number | null; nov: number | null; dec: number | null;
+  total: number;
+  max_drawdown: number;
+  days_for_mdd: number | null;
+  return_over_mdd: number | null;
+}
+interface TradeRow {
+  index: number;
+  entry_date: string | null;
+  exit_date: string;
+  symbol: string;
+  gain_type: string | null;
+  quantity: number;
+  entry_price: number;
+  exit_price: number;
+  holding_days: number;
+  pnl: number;
 }
 interface BacktestResult {
   status: "completed" | "insufficient_data" | "failed";
@@ -113,7 +148,9 @@ interface BacktestResult {
   legs_count?: number;
   date_range?: { start: string; end: string };
   summary?: BacktestSummary;
+  yearly_returns?: YearlyReturn[];
   equity_curve?: EquityPoint[];
+  trades?: TradeRow[];
   note?: string;
 }
 interface RunResponse {
@@ -128,8 +165,6 @@ interface RunResponse {
 // ── constants ────────────────────────────────────────────────────────────────
 
 const INSTRUMENTS = ["NIFTY", "BANKNIFTY", "SENSEX", "MIDCPNIFTY", "FINNIFTY"];
-
-const TABS = ["Instrument", "Entry", "Legwise", "Leg Builder", "Overall Strategy", "Duration"] as const;
 
 const STRIKE_TYPE_OPTIONS: { value: StrikeType; label: string }[] = [
   { value: "atm", label: "ATM" },
@@ -151,6 +186,12 @@ const REENTRY_OPTIONS: { value: ReentryType | ""; label: string }[] = [
   { value: "re_momentum", label: "RE-Momentum" },
   { value: "re_momentum_reverse", label: "RE-Momentum ↩" },
 ];
+
+const MONTH_KEYS: (keyof YearlyReturn)[] = [
+  "jan", "feb", "mar", "apr", "may", "jun",
+  "jul", "aug", "sep", "oct", "nov", "dec",
+];
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function defaultForm(): StrategyForm {
   return {
@@ -224,6 +265,10 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   return <label className="mb-1 block text-xs font-medium text-ink-muted">{children}</label>;
 }
 
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return <h2 className="font-display text-lg font-semibold text-ink">{children}</h2>;
+}
+
 function Segmented<T extends string>({
   options,
   value,
@@ -234,7 +279,7 @@ function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="inline-flex gap-1 rounded-md border border-rule bg-surface p-1">
+    <div className="inline-flex flex-wrap gap-1 rounded-md border border-rule bg-surface p-1">
       {options.map((opt) => {
         const active = opt.value === value;
         return (
@@ -336,7 +381,25 @@ const STRIKE_EXTRA_LABEL: Partial<Record<StrikeType, string>> = {
   atm_premium_pct: "Percentage",
 };
 
-// ── equity curve chart (hand-rolled SVG, no chart library) ────────────────────
+// A label + right-aligned value stat row (AlgoTest-style).
+function StatRow({
+  label,
+  value,
+  colorClass = "text-ink",
+}: {
+  label: string;
+  value: string;
+  colorClass?: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1 text-sm">
+      <span className="text-ink-muted">{label}</span>
+      <span className={`font-mono font-medium ${colorClass}`}>{value}</span>
+    </div>
+  );
+}
+
+// ── dual-panel equity + drawdown chart (hand-rolled SVG, no chart library) ────
 
 function EquityCurveChart({ data }: { data: EquityPoint[] }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -346,33 +409,50 @@ function EquityCurveChart({ data }: { data: EquityPoint[] }) {
   }
 
   const width = 800;
-  const height = 220;
-  const padding = 28;
+  const padTop = 22;
+  const padX = 44;
+  const topH = 180;
+  const gap = 28;
+  const botH = 120;
+  const padBottom = 20;
+  const totalH = padTop + topH + gap + botH + padBottom;
 
-  const values = data.map((d) => d.cumulative_pnl);
-  const minVal = Math.min(...values, 0);
-  const maxVal = Math.max(...values, 0);
-  const range = maxVal - minVal || 1;
+  const cumVals = data.map((d) => d.cumulative_pnl);
+  const ddVals = data.map((d) => d.drawdown);
 
-  const xStep = data.length > 1 ? (width - padding * 2) / (data.length - 1) : 0;
-  const points = data.map((d, i) => ({
-    x: padding + i * xStep,
-    y: padding + (1 - (d.cumulative_pnl - minVal) / range) * (height - padding * 2),
-    ...d,
-  }));
+  const cumMin = Math.min(...cumVals, 0);
+  const cumMax = Math.max(...cumVals, 0);
+  const cumRange = cumMax - cumMin || 1;
 
-  const zeroY = padding + (1 - (0 - minVal) / range) * (height - padding * 2);
-  const isPositive = values[values.length - 1] >= 0;
-  const lineColor = isPositive ? "var(--color-gain)" : "var(--color-loss)";
-  const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(" ");
+  const ddMin = Math.min(...ddVals, 0);
+  const ddRange = 0 - ddMin || 1;
+
+  const xStep = data.length > 1 ? (width - padX - 12) / (data.length - 1) : 0;
+  const xAt = (i: number) => padX + i * xStep;
+
+  const topYAt = (v: number) => padTop + (1 - (v - cumMin) / cumRange) * topH;
+  const topZeroY = topYAt(0);
+
+  const botTop = padTop + topH + gap;
+  const botYAt = (v: number) => botTop + (1 - (v - ddMin) / ddRange) * botH;
+  const botZeroY = botYAt(0);
+
+  const isPositive = cumVals[cumVals.length - 1] >= 0;
+  const cumColor = isPositive ? "var(--color-gain)" : "var(--color-loss)";
+
+  const cumLine = data.map((d, i) => `${xAt(i)},${topYAt(d.cumulative_pnl)}`).join(" ");
+
+  // Drawdown filled area: down the drawdown line, back along the zero line.
+  const ddLine = data.map((d, i) => `${xAt(i)},${botYAt(d.drawdown)}`).join(" ");
+  const ddArea = `${padX},${botZeroY} ${ddLine} ${xAt(data.length - 1)},${botZeroY}`;
 
   function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     const relX = ((e.clientX - rect.left) / rect.width) * width;
     let nearest = 0;
     let minDist = Infinity;
-    points.forEach((p, i) => {
-      const dist = Math.abs(p.x - relX);
+    data.forEach((_, i) => {
+      const dist = Math.abs(xAt(i) - relX);
       if (dist < minDist) {
         minDist = dist;
         nearest = i;
@@ -381,40 +461,242 @@ function EquityCurveChart({ data }: { data: EquityPoint[] }) {
     setHoverIdx(nearest);
   }
 
-  const hovered = hoverIdx !== null ? points[hoverIdx] : null;
+  const hovered = hoverIdx !== null ? data[hoverIdx] : null;
+  const hoveredX = hoverIdx !== null ? xAt(hoverIdx) : 0;
+
+  // Quarter-ish x-axis date labels (up to ~6).
+  const labelStep = Math.max(1, Math.floor(data.length / 6));
+  const xLabels = data.filter((_, i) => i % labelStep === 0 || i === data.length - 1);
 
   return (
-    <div className="relative">
+    <div className="relative overflow-x-auto">
       <svg
-        viewBox={`0 0 ${width} ${height}`}
+        viewBox={`0 0 ${width} ${totalH}`}
         width="100%"
-        height={height}
+        height={totalH}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHoverIdx(null)}
-        className="overflow-visible"
+        className="min-w-[640px]"
       >
-        <line x1={padding} y1={zeroY} x2={width - padding} y2={zeroY} stroke="var(--color-rule)" strokeDasharray="4 4" />
-        <polyline points={polylinePoints} fill="none" stroke={lineColor} strokeWidth="2" />
+        {/* top panel: cumulative P&L */}
+        <text x={padX} y={12} className="fill-[var(--color-ink-muted)] text-[11px]">Cumulative P&amp;L</text>
+        <text x={padX - 6} y={topYAt(cumMax) + 3} textAnchor="end" className="fill-[var(--color-ink-faint)] text-[9px]">
+          {rupeeStr(cumMax)}
+        </text>
+        <text x={padX - 6} y={topYAt(cumMin) + 3} textAnchor="end" className="fill-[var(--color-ink-faint)] text-[9px]">
+          {rupeeStr(cumMin)}
+        </text>
+        <line x1={padX} y1={topZeroY} x2={width - 12} y2={topZeroY} stroke="var(--color-rule)" strokeDasharray="4 4" />
+        <polyline points={cumLine} fill="none" stroke={cumColor} strokeWidth="2" />
+
+        {/* bottom panel: drawdown */}
+        <text x={padX} y={botTop - 8} className="fill-[var(--color-ink-muted)] text-[11px]">Drawdown</text>
+        <text x={padX - 6} y={botZeroY + 3} textAnchor="end" className="fill-[var(--color-ink-faint)] text-[9px]">₹0</text>
+        <text x={padX - 6} y={botYAt(ddMin) + 3} textAnchor="end" className="fill-[var(--color-ink-faint)] text-[9px]">
+          {rupeeStr(ddMin)}
+        </text>
+        <polygon points={ddArea} fill="var(--color-loss)" fillOpacity="0.18" />
+        <polyline points={ddLine} fill="none" stroke="var(--color-loss)" strokeWidth="1.5" />
+        <line x1={padX} y1={botZeroY} x2={width - 12} y2={botZeroY} stroke="var(--color-rule)" strokeDasharray="4 4" />
+
+        {/* x-axis date labels (shared) */}
+        {xLabels.map((d) => {
+          const i = data.indexOf(d);
+          return (
+            <text
+              key={d.date}
+              x={xAt(i)}
+              y={totalH - 4}
+              textAnchor="middle"
+              className="fill-[var(--color-ink-faint)] text-[9px]"
+            >
+              {d.date.slice(0, 7)}
+            </text>
+          );
+        })}
+
+        {/* hover crosshair spanning both panels */}
         {hovered && (
           <>
-            <line x1={hovered.x} y1={padding} x2={hovered.x} y2={height - padding} stroke="var(--color-rule)" strokeWidth="1" />
-            <circle cx={hovered.x} cy={hovered.y} r="4" fill={lineColor} />
+            <line x1={hoveredX} y1={padTop} x2={hoveredX} y2={botTop + botH} stroke="var(--color-rule-strong)" strokeWidth="1" />
+            <circle cx={hoveredX} cy={topYAt(hovered.cumulative_pnl)} r="3.5" fill={cumColor} />
+            <circle cx={hoveredX} cy={botYAt(hovered.drawdown)} r="3.5" fill="var(--color-loss)" />
           </>
         )}
       </svg>
       {hovered && (
         <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-md border border-rule bg-surface px-2 py-1 text-xs shadow-token-sm"
-          style={{ left: `${(hovered.x / width) * 100}%`, top: 0 }}
+          className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-md border border-rule bg-surface px-2 py-1 text-xs shadow-token-sm"
+          style={{ left: `${(hoveredX / width) * 100}%`, top: 0 }}
         >
           <div className="text-ink-muted">{hovered.date}</div>
-          <div className={`font-mono ${colorSign(hovered.cumulative_pnl)}`}>{rupeeStr(hovered.cumulative_pnl)}</div>
+          <div className={`font-mono ${colorSign(hovered.cumulative_pnl)}`}>P&amp;L {rupeeStr(hovered.cumulative_pnl)}</div>
+          <div className="font-mono text-loss">DD {rupeeStr(hovered.drawdown)}</div>
         </div>
       )}
-      <div className="mt-2 flex justify-between text-xs text-ink-faint">
-        <span>{data[0].date} · {rupeeStr(data[0].cumulative_pnl)}</span>
-        <span>{data[data.length - 1].date} · {rupeeStr(data[data.length - 1].cumulative_pnl)}</span>
+    </div>
+  );
+}
+
+// ── results panel ─────────────────────────────────────────────────────────────
+
+const F_AND_O_DISCLAIMER =
+  "Following results are backtested on equity trade data. These historical " +
+  "simulations do not represent actual trading and have not been executed " +
+  "in the live market.";
+
+function ResultsHeader() {
+  return (
+    <div>
+      <h2 className="font-display text-xl font-semibold tracking-wide text-ink">BACKTEST RESULT</h2>
+      <div className="mt-2 rounded-md border border-estimate/30 bg-estimate-soft px-4 py-2.5 text-xs text-ink-muted">
+        {F_AND_O_DISCLAIMER}
       </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Badge tone="brand">Equity simulation</Badge>
+        <Badge tone="neutral">Realized gains only</Badge>
+        <Badge tone="estimate">F&amp;O: coming soon</Badge>
+      </div>
+    </div>
+  );
+}
+
+function SummaryStats({ s }: { s: BacktestSummary | null }) {
+  const ddDuration =
+    s && s.max_drawdown_start && s.max_drawdown_end
+      ? `${s.max_drawdown_duration_days} days (${s.max_drawdown_start} → ${s.max_drawdown_end})`
+      : s
+        ? `${s.max_drawdown_duration_days} days`
+        : "—";
+
+  return (
+    <div className="grid grid-cols-1 gap-x-8 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="divide-y divide-rule">
+        <StatRow label="Overall Profit" value={rupeeStr(s?.overall_profit)} colorClass={colorSign(s?.overall_profit ?? null)} />
+        <StatRow label="No. of Trades" value={s ? String(s.total_trades) : "—"} />
+        <StatRow label="Average Profit per Trade" value={rupeeStr(s?.avg_profit_per_trade)} colorClass={colorSign(s?.avg_profit_per_trade ?? null)} />
+        <StatRow label="Win %" value={pctStr(s?.win_pct)} />
+        <StatRow label="Loss %" value={pctStr(s?.loss_pct)} />
+        <StatRow label="Average Profit on Winning Trades" value={rupeeStr(s?.avg_profit_on_winning)} colorClass="text-gain" />
+      </div>
+      <div className="divide-y divide-rule">
+        <StatRow label="Average Loss on Losing Trades" value={rupeeStr(s?.avg_loss_on_losing)} colorClass="text-loss" />
+        <StatRow label="Max Profit in Single Trade" value={rupeeStr(s?.max_profit_single_trade)} colorClass="text-gain" />
+        <StatRow label="Max Loss in Single Trade" value={rupeeStr(s?.max_loss_single_trade)} colorClass="text-loss" />
+        <StatRow label="Max Drawdown" value={rupeeStr(s?.max_drawdown != null ? -s.max_drawdown : null)} colorClass="text-loss" />
+        <StatRow label="Duration of Max Drawdown" value={ddDuration} />
+      </div>
+      <div className="divide-y divide-rule">
+        <StatRow label="Return / MaxDD" value={ratioStr(s?.return_over_max_dd)} />
+        <StatRow label="Reward to Risk Ratio" value={ratioStr(s?.reward_to_risk_ratio)} />
+        <StatRow label="Expectancy Ratio" value={rupeeStr(s?.expectancy_ratio)} colorClass={colorSign(s?.expectancy_ratio ?? null)} />
+        <StatRow label="Max Win Streak (trades)" value={s ? String(s.max_win_streak) : "—"} />
+        <StatRow label="Max Losing Streak (trades)" value={s ? String(s.max_losing_streak) : "—"} />
+      </div>
+    </div>
+  );
+}
+
+function cellColor(v: number | null): string {
+  if (v === null) return "text-ink-faint";
+  if (v > 0) return "text-gain";
+  if (v < 0) return "text-loss";
+  return "text-ink";
+}
+
+function YearlyReturnsTable({ rows }: { rows: YearlyReturn[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[900px] text-right text-xs">
+        <thead>
+          <tr className="border-b border-rule text-ink-muted">
+            <th className="px-2 py-2 text-left font-medium">Year</th>
+            {MONTH_LABELS.map((m) => (
+              <th key={m} className="px-2 py-2 font-medium">{m}</th>
+            ))}
+            <th className="px-2 py-2 font-medium">Total</th>
+            <th className="px-2 py-2 font-medium">Max DD</th>
+            <th className="px-2 py-2 font-medium">Days MDD</th>
+            <th className="px-2 py-2 font-medium">R/MDD</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.year} className="border-b border-rule last:border-0">
+              <td className="px-2 py-2 text-left font-medium text-ink">{row.year}</td>
+              {MONTH_KEYS.map((k) => {
+                const v = row[k] as number | null;
+                return (
+                  <td key={k} className={`px-2 py-2 font-mono ${cellColor(v)}`}>
+                    {v === null ? "—" : rupeeStr(v)}
+                  </td>
+                );
+              })}
+              <td className={`px-2 py-2 font-mono font-semibold ${cellColor(row.total)}`}>{rupeeStr(row.total)}</td>
+              <td className="px-2 py-2 font-mono text-loss">{rupeeStr(row.max_drawdown != null ? -row.max_drawdown : null)}</td>
+              <td className="px-2 py-2 font-mono text-ink">{row.days_for_mdd ?? "—"}</td>
+              <td className="px-2 py-2 font-mono text-ink">{ratioStr(row.return_over_mdd)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FullReportTable({ trades }: { trades: TradeRow[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const rows = showAll ? trades : trades.slice(0, 10);
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <SectionHeading>Full Report</SectionHeading>
+        <span className="text-xs text-ink-faint">{trades.length} trades</span>
+      </div>
+      <Card className="overflow-hidden p-0">
+        <div className="max-h-[400px] overflow-y-auto">
+          <table className="w-full min-w-[720px] text-right text-xs">
+            <thead className="sticky top-0 bg-surface">
+              <tr className="border-b border-rule text-ink-muted">
+                <th className="px-3 py-2 text-left font-medium">#</th>
+                <th className="px-3 py-2 text-left font-medium">Symbol</th>
+                <th className="px-3 py-2 text-left font-medium">Gain Type</th>
+                <th className="px-3 py-2 text-left font-medium">Entry Date</th>
+                <th className="px-3 py-2 text-left font-medium">Exit Date</th>
+                <th className="px-3 py-2 font-medium">Holding Days</th>
+                <th className="px-3 py-2 font-medium">Qty</th>
+                <th className="px-3 py-2 font-medium">Entry Price</th>
+                <th className="px-3 py-2 font-medium">Exit Price</th>
+                <th className="px-3 py-2 font-medium">P&amp;L</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((t) => (
+                <tr key={t.index} className="border-b border-rule last:border-0">
+                  <td className="px-3 py-2 text-left font-mono text-ink-muted">{t.index}</td>
+                  <td className="px-3 py-2 text-left text-ink">{t.symbol}</td>
+                  <td className="px-3 py-2 text-left text-ink-muted">{t.gain_type ?? "—"}</td>
+                  <td className="px-3 py-2 text-left text-ink-muted">{t.entry_date ?? "—"}</td>
+                  <td className="px-3 py-2 text-left text-ink-muted">{t.exit_date}</td>
+                  <td className="px-3 py-2 font-mono text-ink">{t.holding_days}</td>
+                  <td className="px-3 py-2 font-mono text-ink">{t.quantity}</td>
+                  <td className="px-3 py-2 font-mono text-ink">{rupeeStr(t.entry_price)}</td>
+                  <td className="px-3 py-2 font-mono text-ink">{rupeeStr(t.exit_price)}</td>
+                  <td className={`px-3 py-2 font-mono font-medium ${colorSign(t.pnl)}`}>{rupeeStr(t.pnl)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      {trades.length > 10 && (
+        <div className="mt-3">
+          <Button variant="secondary" className="h-8 px-3 text-xs" onClick={() => setShowAll((v) => !v)}>
+            {showAll ? "Show fewer" : `Show all ${trades.length} trades`}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -422,7 +704,6 @@ function EquityCurveChart({ data }: { data: EquityPoint[] }) {
 // ── main component ────────────────────────────────────────────────────────────
 
 export function BacktestClient() {
-  const [activeTab, setActiveTab] = useState(0);
   const [form, setForm] = useState<StrategyForm>(defaultForm());
   const [legs, setLegs] = useState<LegForm[]>([]);
 
@@ -567,31 +848,13 @@ export function BacktestClient() {
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        {/* LEFT — Strategy builder (40%) */}
+        {/* LEFT — Strategy builder (40%), all sections stacked */}
         <div className="lg:col-span-2">
-          <div className="flex flex-wrap gap-2" role="tablist">
-            {TABS.map((tab, i) => (
-              <button
-                key={tab}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === i}
-                onClick={() => setActiveTab(i)}
-                className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeTab === i
-                    ? "border-brand bg-brand-soft text-brand"
-                    : "border-rule text-ink-muted hover:border-rule-strong hover:text-ink"
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-4 space-y-4">
-            {/* TAB 1 — Instrument */}
-            {activeTab === 0 && (
-              <>
+          <div className="space-y-8">
+            {/* SECTION 1 — Instrument */}
+            <section>
+              <SectionHeading>Instrument settings</SectionHeading>
+              <div className="mt-3 space-y-4">
                 <Card className="p-5">
                   <MetricLabel>Select instrument</MetricLabel>
                   <div className="mt-3 flex flex-wrap gap-1 rounded-md border border-rule bg-surface p-1">
@@ -622,12 +885,15 @@ export function BacktestClient() {
                     />
                   </div>
                 </Card>
-              </>
-            )}
+              </div>
+            </section>
 
-            {/* TAB 2 — Entry settings */}
-            {activeTab === 1 && (
-              <>
+            <hr className="border-rule" />
+
+            {/* SECTION 2 — Entry settings */}
+            <section>
+              <SectionHeading>Entry settings</SectionHeading>
+              <div className="mt-3 space-y-4">
                 <Card className="p-5">
                   <MetricLabel>Strategy type</MetricLabel>
                   <div className="mt-3">
@@ -725,12 +991,15 @@ export function BacktestClient() {
                     </div>
                   )}
                 </Card>
-              </>
-            )}
+              </div>
+            </section>
 
-            {/* TAB 3 — Legwise settings */}
-            {activeTab === 2 && (
-              <>
+            <hr className="border-rule" />
+
+            {/* SECTION 3 — Legwise settings */}
+            <section>
+              <SectionHeading>Legwise settings</SectionHeading>
+              <div className="mt-3 space-y-4">
                 <Card className="p-5">
                   <MetricLabel>Square off</MetricLabel>
                   <div className="mt-3 space-y-2">
@@ -780,12 +1049,15 @@ export function BacktestClient() {
                     </div>
                   )}
                 </Card>
-              </>
-            )}
+              </div>
+            </section>
 
-            {/* TAB 4 — Leg builder */}
-            {activeTab === 3 && (
-              <Card className="p-5">
+            <hr className="border-rule" />
+
+            {/* SECTION 4 — Leg Builder */}
+            <section>
+              <SectionHeading>Leg Builder</SectionHeading>
+              <Card className="mt-3 p-5">
                 <div className="flex items-center justify-between">
                   <MetricLabel>Legs ({legs.length}/10)</MetricLabel>
                 </div>
@@ -1062,11 +1334,14 @@ export function BacktestClient() {
                   </div>
                 )}
               </Card>
-            )}
+            </section>
 
-            {/* TAB 5 — Overall strategy settings */}
-            {activeTab === 4 && (
-              <>
+            <hr className="border-rule" />
+
+            {/* SECTION 5 — Overall strategy settings */}
+            <section>
+              <SectionHeading>Overall strategy settings</SectionHeading>
+              <div className="mt-3 space-y-4">
                 <Card className="p-5">
                   <div className="flex items-center justify-between">
                     <MetricLabel>Overall Stop Loss</MetricLabel>
@@ -1197,7 +1472,7 @@ export function BacktestClient() {
                   )}
                 </Card>
 
-                <h3 className="mt-2 text-sm font-medium text-ink-muted">Trailing Options</h3>
+                <h3 className="text-sm font-medium text-ink-muted">Trailing Options</h3>
 
                 <Card className="p-5">
                   <div className="flex items-center justify-between">
@@ -1348,12 +1623,15 @@ export function BacktestClient() {
                     </div>
                   )}
                 </Card>
-              </>
-            )}
+              </div>
+            </section>
 
-            {/* TAB 6 — Duration */}
-            {activeTab === 5 && (
-              <Card className="p-5">
+            <hr className="border-rule" />
+
+            {/* SECTION 6 — Duration */}
+            <section>
+              <SectionHeading>Enter the duration of your backtest</SectionHeading>
+              <Card className="mt-3 p-5">
                 <MetricLabel>Backtest period</MetricLabel>
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <div>
@@ -1381,7 +1659,7 @@ export function BacktestClient() {
                   coming soon &mdash; strategy parameters will apply once available.
                 </div>
               </Card>
-            )}
+            </section>
           </div>
 
           {/* Bottom of left panel */}
@@ -1422,172 +1700,151 @@ export function BacktestClient() {
           </Card>
         </div>
 
-        {/* RIGHT — Results panel (60%) */}
+        {/* RIGHT — Results panel (60%), sticky on desktop */}
         <div className="lg:col-span-3">
-          {running ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                {[0, 1, 2, 3, 4, 5].map((i) => (
-                  <Card key={i} className="p-5">
-                    <div className="h-3 w-20 animate-pulse rounded bg-rule" />
-                    <div className="mt-3 h-8 w-24 animate-pulse rounded bg-rule" />
-                  </Card>
-                ))}
-              </div>
-              <Card className="p-5">
-                <div className="h-[220px] animate-pulse rounded bg-rule" />
-              </Card>
-            </div>
-          ) : !result ? (
-            <Card className="p-5">
-              <EmptyState
-                icon={
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M3 3v18h18" />
-                    <path d="m7 14 4-4 3 3 5-6" />
-                  </svg>
-                }
-                title="No backtest run yet"
-                description="Configure your strategy on the left and click Run Backtest to see results."
-              />
-            </Card>
-          ) : result.status === "insufficient_data" ? (
-            <Card className="border-estimate/30 bg-estimate-soft p-5">
-              <div className="flex items-start gap-3">
-                <span className="text-lg">⚠</span>
-                <div>
-                  <p className="font-display text-base text-ink">
-                    {result.strategy_type === "options" ? "F&O Simulation Pending" : "Not Enough Data"}
-                  </p>
-                  <p className="mt-1 text-sm text-ink-muted">{result.message}</p>
-                  <p className="mt-2 text-xs text-ink-faint">
-                    Your strategy has been saved. We&rsquo;ll notify you when F&amp;O
-                    historical data is available.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              <div className="rounded-md border border-brand-soft bg-brand-soft/40 px-4 py-2.5 text-sm text-ink-muted">
-                Equity simulation &mdash; based on your realized gains{" "}
-                {result.date_range?.start} to {result.date_range?.end}. F&amp;O
-                strategy parameters will apply once historical options data is
-                integrated.
-              </div>
-
-              <h2 className="font-display text-lg text-ink">Summary</h2>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div className="lg:sticky lg:top-4">
+            {running ? (
+              <div className="space-y-4">
+                <div className="h-6 w-48 animate-pulse rounded bg-rule" />
                 <Card className="p-5">
-                  <MetricLabel>Net P&amp;L</MetricLabel>
-                  <div className="mt-3">
-                    <span className={`font-mono text-2xl font-medium ${colorSign(result.summary?.net_profit)}`}>
-                      {rupeeStr(result.summary?.net_profit)}
-                    </span>
-                  </div>
-                </Card>
-                <Card className="p-5">
-                  <MetricLabel>Win Rate</MetricLabel>
-                  <div className="mt-3">
-                    <span className="font-mono text-2xl font-medium text-ink">
-                      {pctStr(result.summary?.win_rate_pct)}
-                    </span>
-                  </div>
-                </Card>
-                <Card className="p-5">
-                  <MetricLabel>Profit Factor</MetricLabel>
-                  <div className="mt-3">
-                    <span className="font-mono text-2xl font-medium text-ink">
-                      {ratioStr(result.summary?.profit_factor)}
-                    </span>
-                  </div>
-                </Card>
-                <Card className="p-5">
-                  <MetricLabel>Max Drawdown</MetricLabel>
-                  <div className="mt-3">
-                    <span className="font-mono text-2xl font-medium text-ink">
-                      {pctStr(result.summary?.max_drawdown_pct)}
-                    </span>
-                  </div>
-                </Card>
-                <Card className="p-5">
-                  <MetricLabel>Sharpe Ratio</MetricLabel>
-                  <div className="mt-3">
-                    <span className="font-mono text-2xl font-medium text-ink">
-                      {ratioStr(result.summary?.sharpe_ratio)}
-                    </span>
-                  </div>
-                </Card>
-                <Card className="p-5">
-                  <MetricLabel>Total Trades</MetricLabel>
-                  <div className="mt-3">
-                    <span className="font-mono text-2xl font-medium text-ink">
-                      {result.summary?.total_trades ?? "—"}
-                    </span>
-                  </div>
-                </Card>
-              </div>
-
-              <h2 className="font-display text-lg text-ink">Equity Curve</h2>
-              <Card className="p-5">
-                {result.equity_curve && result.equity_curve.length > 0 ? (
-                  <EquityCurveChart data={result.equity_curve} />
-                ) : (
-                  <p className="text-sm text-ink-faint">Not enough trade history to draw equity curve.</p>
-                )}
-              </Card>
-            </div>
-          )}
-
-          {pastRuns.length > 0 && (
-            <div className="mt-6">
-              <h2 className="mb-3 font-display text-lg text-ink">Past Runs</h2>
-              <Card className="overflow-x-auto p-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-rule text-left text-xs text-ink-muted">
-                      <th className="px-4 py-2 font-medium">Run date</th>
-                      <th className="px-4 py-2 font-medium">Status</th>
-                      <th className="px-4 py-2 font-medium">Net P&amp;L</th>
-                      <th className="px-4 py-2 font-medium">Trades</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pastRuns.map((run) => (
-                      <tr
-                        key={run.id}
-                        onClick={() => loadRun(run)}
-                        className="cursor-pointer border-b border-rule last:border-0 hover:bg-brand-soft/30"
-                      >
-                        <td className="px-4 py-2 text-ink-muted">
-                          {run.created_at ? new Date(run.created_at).toLocaleString("en-IN") : "—"}
-                        </td>
-                        <td className="px-4 py-2">
-                          <Badge
-                            tone={
-                              run.status === "completed"
-                                ? "gain"
-                                : run.status === "failed"
-                                  ? "loss"
-                                  : "estimate"
-                            }
-                          >
-                            {run.status}
-                          </Badge>
-                        </td>
-                        <td className={`px-4 py-2 font-mono ${colorSign(run.result_json?.summary?.net_profit)}`}>
-                          {rupeeStr(run.result_json?.summary?.net_profit)}
-                        </td>
-                        <td className="px-4 py-2 font-mono text-ink">
-                          {run.result_json?.summary?.total_trades ?? "—"}
-                        </td>
-                      </tr>
+                  <div className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-3">
+                    {[0, 1, 2].map((col) => (
+                      <div key={col} className="space-y-2">
+                        {[0, 1, 2, 3, 4].map((i) => (
+                          <div key={i} className="h-4 animate-pulse rounded bg-rule" />
+                        ))}
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </Card>
+                <Card className="p-5">
+                  <div className="h-[320px] animate-pulse rounded bg-rule" />
+                </Card>
+                <Card className="p-5">
+                  <div className="h-[200px] animate-pulse rounded bg-rule" />
+                </Card>
+              </div>
+            ) : !result ? (
+              <Card className="p-5">
+                <EmptyState
+                  icon={
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 3v18h18" />
+                      <path d="m7 14 4-4 3 3 5-6" />
+                    </svg>
+                  }
+                  title="No backtest run yet"
+                  description="Configure your strategy on the left and click Run Backtest to see results."
+                />
               </Card>
-            </div>
-          )}
+            ) : result.status === "insufficient_data" ? (
+              <div className="space-y-4">
+                <Card className="border-estimate/30 bg-estimate-soft p-5">
+                  <div className="flex items-start gap-3">
+                    <span className="text-lg">⚠</span>
+                    <div>
+                      <p className="font-display text-base text-ink">
+                        {result.strategy_type === "options"
+                          ? "F&O Strategy Simulation Pending"
+                          : "Not Enough Data"}
+                      </p>
+                      <p className="mt-1 text-sm text-ink-muted">{result.message}</p>
+                      <p className="mt-2 text-xs text-ink-faint">
+                        Your strategy has been saved. We&rsquo;ll notify you when F&amp;O
+                        historical data is available.
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+                {/* Show the stat scaffold with "--" so the user sees what WILL populate */}
+                <Card className="p-5">
+                  <SummaryStats s={null} />
+                </Card>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <ResultsHeader />
+
+                <Card className="p-5">
+                  <SummaryStats s={result.summary ?? null} />
+                </Card>
+
+                <div>
+                  <SectionHeading>Year-wise Returns</SectionHeading>
+                  <Card className="mt-3 p-5">
+                    {result.yearly_returns && result.yearly_returns.length > 0 ? (
+                      <YearlyReturnsTable rows={result.yearly_returns} />
+                    ) : (
+                      <p className="text-sm text-ink-faint">No yearly data.</p>
+                    )}
+                  </Card>
+                </div>
+
+                <div>
+                  <SectionHeading>Equity Curve</SectionHeading>
+                  <Card className="mt-3 p-5">
+                    {result.equity_curve && result.equity_curve.length > 0 ? (
+                      <EquityCurveChart data={result.equity_curve} />
+                    ) : (
+                      <p className="text-sm text-ink-faint">Not enough trade history to draw equity curve.</p>
+                    )}
+                  </Card>
+                </div>
+
+                {result.trades && result.trades.length > 0 && <FullReportTable trades={result.trades} />}
+              </div>
+            )}
+
+            {pastRuns.length > 0 && (
+              <div className="mt-6">
+                <h2 className="mb-3 font-display text-lg text-ink">Past Runs</h2>
+                <Card className="overflow-x-auto p-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-rule text-left text-xs text-ink-muted">
+                        <th className="px-4 py-2 font-medium">Run date</th>
+                        <th className="px-4 py-2 font-medium">Status</th>
+                        <th className="px-4 py-2 font-medium">Net P&amp;L</th>
+                        <th className="px-4 py-2 font-medium">Trades</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pastRuns.map((run) => (
+                        <tr
+                          key={run.id}
+                          onClick={() => loadRun(run)}
+                          className="cursor-pointer border-b border-rule last:border-0 hover:bg-brand-soft/30"
+                        >
+                          <td className="px-4 py-2 text-ink-muted">
+                            {run.created_at ? new Date(run.created_at).toLocaleString("en-IN") : "—"}
+                          </td>
+                          <td className="px-4 py-2">
+                            <Badge
+                              tone={
+                                run.status === "completed"
+                                  ? "gain"
+                                  : run.status === "failed"
+                                    ? "loss"
+                                    : "estimate"
+                              }
+                            >
+                              {run.status}
+                            </Badge>
+                          </td>
+                          <td className={`px-4 py-2 font-mono ${colorSign(run.result_json?.summary?.overall_profit)}`}>
+                            {rupeeStr(run.result_json?.summary?.overall_profit)}
+                          </td>
+                          <td className="px-4 py-2 font-mono text-ink">
+                            {run.result_json?.summary?.total_trades ?? "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </Card>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
