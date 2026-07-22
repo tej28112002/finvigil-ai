@@ -331,6 +331,14 @@ function ToggleSwitch({
   );
 }
 
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span title={text} className="cursor-help text-ink-faint" aria-label="Info">
+      {" "}ⓘ
+    </span>
+  );
+}
+
 function rupeeStr(v: number | null | undefined): string {
   if (v === null || v === undefined) return "—";
   const sign = v < 0 ? "-" : "";
@@ -401,6 +409,30 @@ function StatRow({
 
 // ── dual-panel equity + drawdown chart (hand-rolled SVG, no chart library) ────
 
+function formatAxisRupee(v: number): string {
+  const sign = v < 0 ? "-" : "";
+  const abs = Math.abs(v);
+  if (abs >= 100000) {
+    const lakhs = abs / 100000;
+    return `${sign}₹${lakhs % 1 === 0 ? lakhs.toFixed(0) : lakhs.toFixed(1)}L`;
+  }
+  if (abs >= 1000) {
+    const thousands = abs / 1000;
+    return `${sign}₹${thousands % 1 === 0 ? thousands.toFixed(0) : thousands.toFixed(1)}K`;
+  }
+  return `${sign}₹${abs.toFixed(0)}`;
+}
+
+function formatAxisDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+}
+
+function niceTicks(min: number, max: number, count: number): number[] {
+  if (min === max) return [min];
+  const step = (max - min) / (count - 1);
+  return Array.from({ length: count }, (_, i) => min + step * i);
+}
+
 function EquityCurveChart({ data }: { data: EquityPoint[] }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
@@ -409,12 +441,13 @@ function EquityCurveChart({ data }: { data: EquityPoint[] }) {
   }
 
   const width = 800;
-  const padTop = 22;
-  const padX = 44;
-  const topH = 180;
-  const gap = 28;
+  const padTop = 20;
+  const padX = 56;
+  const padRight = 16;
+  const topH = 200;
+  const gap = 30;
   const botH = 120;
-  const padBottom = 20;
+  const padBottom = 22;
   const totalH = padTop + topH + gap + botH + padBottom;
 
   const cumVals = data.map((d) => d.cumulative_pnl);
@@ -427,7 +460,8 @@ function EquityCurveChart({ data }: { data: EquityPoint[] }) {
   const ddMin = Math.min(...ddVals, 0);
   const ddRange = 0 - ddMin || 1;
 
-  const xStep = data.length > 1 ? (width - padX - 12) / (data.length - 1) : 0;
+  const plotWidth = width - padX - padRight;
+  const xStep = data.length > 1 ? plotWidth / (data.length - 1) : 0;
   const xAt = (i: number) => padX + i * xStep;
 
   const topYAt = (v: number) => padTop + (1 - (v - cumMin) / cumRange) * topH;
@@ -441,10 +475,10 @@ function EquityCurveChart({ data }: { data: EquityPoint[] }) {
   const cumColor = isPositive ? "var(--color-gain)" : "var(--color-loss)";
 
   const cumLine = data.map((d, i) => `${xAt(i)},${topYAt(d.cumulative_pnl)}`).join(" ");
-
-  // Drawdown filled area: down the drawdown line, back along the zero line.
   const ddLine = data.map((d, i) => `${xAt(i)},${botYAt(d.drawdown)}`).join(" ");
-  const ddArea = `${padX},${botZeroY} ${ddLine} ${xAt(data.length - 1)},${botZeroY}`;
+
+  const cumTicks = niceTicks(cumMin, cumMax, 5);
+  const ddTicks = niceTicks(ddMin, 0, 4);
 
   function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -464,76 +498,120 @@ function EquityCurveChart({ data }: { data: EquityPoint[] }) {
   const hovered = hoverIdx !== null ? data[hoverIdx] : null;
   const hoveredX = hoverIdx !== null ? xAt(hoverIdx) : 0;
 
-  // Quarter-ish x-axis date labels (up to ~6).
-  const labelStep = Math.max(1, Math.floor(data.length / 6));
-  const xLabels = data.filter((_, i) => i % labelStep === 0 || i === data.length - 1);
+  // 4-6 evenly spaced x-axis date labels, shown once below the bottom panel.
+  const xLabelStep = Math.max(1, Math.floor((data.length - 1) / 5));
+  const xLabels = data.filter((_, i) => i % xLabelStep === 0 || i === data.length - 1);
 
   return (
-    <div className="relative overflow-x-auto">
-      <svg
-        viewBox={`0 0 ${width} ${totalH}`}
-        width="100%"
-        height={totalH}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setHoverIdx(null)}
-        className="min-w-[640px]"
-      >
-        {/* top panel: cumulative P&L */}
-        <text x={padX} y={12} className="fill-[var(--color-ink-muted)] text-[11px]">Cumulative P&amp;L</text>
-        <text x={padX - 6} y={topYAt(cumMax) + 3} textAnchor="end" className="fill-[var(--color-ink-faint)] text-[9px]">
-          {rupeeStr(cumMax)}
-        </text>
-        <text x={padX - 6} y={topYAt(cumMin) + 3} textAnchor="end" className="fill-[var(--color-ink-faint)] text-[9px]">
-          {rupeeStr(cumMin)}
-        </text>
-        <line x1={padX} y1={topZeroY} x2={width - 12} y2={topZeroY} stroke="var(--color-rule)" strokeDasharray="4 4" />
-        <polyline points={cumLine} fill="none" stroke={cumColor} strokeWidth="2" />
+    <div className="rounded-md border border-rule bg-surface p-3">
+      {/* legend */}
+      <div className="mb-2 flex flex-wrap items-center gap-4 text-xs">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "var(--color-gain)" }} aria-hidden="true" />
+          <span className="text-ink-muted">Cumulative P&amp;L</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "var(--color-brand)" }} aria-hidden="true" />
+          <span className="text-ink-muted">Underlying Value</span>
+          <Badge tone="neutral">Coming soon</Badge>
+        </span>
+      </div>
 
-        {/* bottom panel: drawdown */}
-        <text x={padX} y={botTop - 8} className="fill-[var(--color-ink-muted)] text-[11px]">Drawdown</text>
-        <text x={padX - 6} y={botZeroY + 3} textAnchor="end" className="fill-[var(--color-ink-faint)] text-[9px]">₹0</text>
-        <text x={padX - 6} y={botYAt(ddMin) + 3} textAnchor="end" className="fill-[var(--color-ink-faint)] text-[9px]">
-          {rupeeStr(ddMin)}
-        </text>
-        <polygon points={ddArea} fill="var(--color-loss)" fillOpacity="0.18" />
-        <polyline points={ddLine} fill="none" stroke="var(--color-loss)" strokeWidth="1.5" />
-        <line x1={padX} y1={botZeroY} x2={width - 12} y2={botZeroY} stroke="var(--color-rule)" strokeDasharray="4 4" />
-
-        {/* x-axis date labels (shared) */}
-        {xLabels.map((d) => {
-          const i = data.indexOf(d);
-          return (
-            <text
-              key={d.date}
-              x={xAt(i)}
-              y={totalH - 4}
-              textAnchor="middle"
-              className="fill-[var(--color-ink-faint)] text-[9px]"
-            >
-              {d.date.slice(0, 7)}
-            </text>
-          );
-        })}
-
-        {/* hover crosshair spanning both panels */}
-        {hovered && (
-          <>
-            <line x1={hoveredX} y1={padTop} x2={hoveredX} y2={botTop + botH} stroke="var(--color-rule-strong)" strokeWidth="1" />
-            <circle cx={hoveredX} cy={topYAt(hovered.cumulative_pnl)} r="3.5" fill={cumColor} />
-            <circle cx={hoveredX} cy={botYAt(hovered.drawdown)} r="3.5" fill="var(--color-loss)" />
-          </>
-        )}
-      </svg>
-      {hovered && (
-        <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-md border border-rule bg-surface px-2 py-1 text-xs shadow-token-sm"
-          style={{ left: `${(hoveredX / width) * 100}%`, top: 0 }}
+      <div className="relative overflow-x-auto">
+        <svg
+          viewBox={`0 0 ${width} ${totalH}`}
+          width="100%"
+          height={totalH}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setHoverIdx(null)}
+          className="min-w-[640px]"
         >
-          <div className="text-ink-muted">{hovered.date}</div>
-          <div className={`font-mono ${colorSign(hovered.cumulative_pnl)}`}>P&amp;L {rupeeStr(hovered.cumulative_pnl)}</div>
-          <div className="font-mono text-loss">DD {rupeeStr(hovered.drawdown)}</div>
-        </div>
-      )}
+          {/* top panel: cumulative P&L — subtle gridlines + Y-axis labels */}
+          {cumTicks.map((t, i) => (
+            <g key={`cum-tick-${i}`}>
+              <line
+                x1={padX}
+                y1={topYAt(t)}
+                x2={width - padRight}
+                y2={topYAt(t)}
+                stroke="var(--color-ink-faint)"
+                strokeOpacity="0.1"
+              />
+              <text x={padX - 6} y={topYAt(t) + 3} textAnchor="end" className="fill-[var(--color-ink-faint)] text-[9px]">
+                {formatAxisRupee(t)}
+              </text>
+            </g>
+          ))}
+          <text x={padX} y={12} className="fill-[var(--color-ink-muted)] text-[11px]">Cumulative P&amp;L</text>
+          <line x1={padX} y1={topZeroY} x2={width - padRight} y2={topZeroY} stroke="var(--color-rule)" strokeDasharray="4 4" />
+          <polyline points={cumLine} fill="none" stroke={cumColor} strokeWidth="2" />
+
+          {/* bottom panel: drawdown — clean red line, no fill */}
+          {ddTicks.map((t, i) => (
+            <g key={`dd-tick-${i}`}>
+              <line
+                x1={padX}
+                y1={botYAt(t)}
+                x2={width - padRight}
+                y2={botYAt(t)}
+                stroke="var(--color-ink-faint)"
+                strokeOpacity="0.1"
+              />
+              <text x={padX - 6} y={botYAt(t) + 3} textAnchor="end" className="fill-[var(--color-ink-faint)] text-[9px]">
+                {formatAxisRupee(t)}
+              </text>
+            </g>
+          ))}
+          <text x={padX} y={botTop - 8} className="fill-[var(--color-ink-muted)] text-[11px]">Drawdown</text>
+          <line x1={padX} y1={botZeroY} x2={width - padRight} y2={botZeroY} stroke="var(--color-rule)" strokeDasharray="4 4" />
+          <polyline points={ddLine} fill="none" stroke="var(--color-loss)" strokeWidth="1.5" />
+
+          {/* shared x-axis date labels — once, below the bottom panel */}
+          {xLabels.map((d) => {
+            const i = data.indexOf(d);
+            return (
+              <text
+                key={d.date}
+                x={xAt(i)}
+                y={totalH - 4}
+                textAnchor="middle"
+                className="fill-[var(--color-ink-faint)] text-[9px]"
+              >
+                {formatAxisDate(d.date)}
+              </text>
+            );
+          })}
+
+          {/* hover crosshair spanning both panels */}
+          {hovered && (
+            <>
+              <line
+                x1={hoveredX}
+                y1={padTop}
+                x2={hoveredX}
+                y2={botTop + botH}
+                stroke="var(--color-rule-strong)"
+                strokeWidth="1"
+                strokeDasharray="3 3"
+              />
+              <circle cx={hoveredX} cy={topYAt(hovered.cumulative_pnl)} r="3.5" fill={cumColor} />
+              <circle cx={hoveredX} cy={botYAt(hovered.drawdown)} r="3.5" fill="var(--color-loss)" />
+            </>
+          )}
+        </svg>
+        {hovered && (
+          <div
+            className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-md border border-rule bg-surface px-2 py-1 text-xs shadow-token-sm"
+            style={{ left: `${(hoveredX / width) * 100}%`, top: 0 }}
+          >
+            <div className="text-ink-muted">Date: {hovered.date}</div>
+            <div className={`font-mono ${colorSign(hovered.cumulative_pnl)}`}>
+              Cumulative P&amp;L: {rupeeStr(hovered.cumulative_pnl)}
+            </div>
+            <div className="font-mono text-loss">Drawdown: {rupeeStr(hovered.drawdown)}</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -558,6 +636,101 @@ function ResultsHeader() {
         <Badge tone="estimate">F&amp;O: coming soon</Badge>
       </div>
     </div>
+  );
+}
+
+// Include Brokerage / Taxes & charges / Slippage / VIX range — all display
+// only for now, none of these feed into the computation yet.
+function FilterRecalcRow() {
+  const [includeBrokerage, setIncludeBrokerage] = useState(false);
+  const [taxesCharges, setTaxesCharges] = useState(false);
+  const [slippagePct, setSlippagePct] = useState(0);
+  const [vixFrom, setVixFrom] = useState(0);
+  const [vixTo, setVixTo] = useState(150);
+  const [slippageMsg, setSlippageMsg] = useState<string | null>(null);
+  const [vixMsg, setVixMsg] = useState<string | null>(null);
+
+  return (
+    <Card className="p-5">
+      <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+        {/* LEFT */}
+        <div className="space-y-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <FieldLabel>Include Brokerage</FieldLabel>
+              <ToggleSwitch checked={includeBrokerage} onChange={setIncludeBrokerage} />
+            </div>
+            {includeBrokerage ? (
+              <input type="text" disabled value="0" className={`${inputCls} mt-1 w-24`} />
+            ) : (
+              <p className="mt-1 text-xs text-ink-faint">0</p>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2">
+              <FieldLabel>
+                Taxes &amp; charges
+                <InfoTip text="Taxes & charges will compute once broker integration provides transaction-level data." />
+              </FieldLabel>
+              <ToggleSwitch checked={taxesCharges} onChange={setTaxesCharges} />
+            </div>
+            <p className="mt-1 text-xs text-ink-faint">₹ 0</p>
+          </div>
+
+          <div>
+            <FieldLabel>
+              Slippage (in %)
+              <InfoTip text="Slippage simulates the difference between expected and actual fill price as a % of trade value." />
+            </FieldLabel>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="number"
+                className={`${inputCls} w-24`}
+                value={slippagePct}
+                onChange={(e) => setSlippagePct(Number(e.target.value) || 0)}
+              />
+              <Button
+                variant="secondary"
+                className="h-8 px-3 text-xs"
+                onClick={() => setSlippageMsg("Slippage recalculation coming soon.")}
+              >
+                Re-calculate
+              </Button>
+            </div>
+            {slippageMsg && <p className="mt-1 text-xs text-ink-faint">{slippageMsg}</p>}
+          </div>
+        </div>
+
+        {/* RIGHT */}
+        <div>
+          <FieldLabel>Select VIX Range</FieldLabel>
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              type="number"
+              className={`${inputCls} w-20`}
+              value={vixFrom}
+              onChange={(e) => setVixFrom(Number(e.target.value) || 0)}
+            />
+            <span className="text-xs text-ink-faint">to</span>
+            <input
+              type="number"
+              className={`${inputCls} w-20`}
+              value={vixTo}
+              onChange={(e) => setVixTo(Number(e.target.value) || 0)}
+            />
+            <Button
+              variant="secondary"
+              className="h-8 px-3 text-xs"
+              onClick={() => setVixMsg("VIX range filtering coming soon.")}
+            >
+              Re-calculate
+            </Button>
+          </div>
+          {vixMsg && <p className="mt-1 text-xs text-ink-faint">{vixMsg}</p>}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -604,6 +777,56 @@ function cellColor(v: number | null): string {
   return "text-ink";
 }
 
+// Pill-styled <select> — visible label never changes on selection (display
+// only, no filtering logic wired up yet), matching the broker filter chips
+// on the portfolio page.
+function PillSelect({
+  label,
+  options,
+  isNew = false,
+}: {
+  label: string;
+  options: string[];
+  isNew?: boolean;
+}) {
+  return (
+    <div className="relative inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-rule px-3 py-1.5 text-sm font-medium text-ink-muted transition-colors hover:border-rule-strong hover:text-ink">
+      <span>{label}</span>
+      {isNew && <Badge tone="brand">NEW</Badge>}
+      <span aria-hidden="true">▾</span>
+      <select
+        defaultValue=""
+        aria-label={label}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      >
+        <option value="" disabled />
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function FilterByRow() {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <span className="text-xs font-medium text-ink-muted">Filter by</span>
+      <PillSelect
+        label="Weekdays"
+        options={["All Days", "Weekdays", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]}
+      />
+      <PillSelect label="DTE" options={["All", "DTE 0", "DTE 1", "DTE 2", "DTE 7"]} />
+      <PillSelect label="Budget Days" options={["Include", "Exclude"]} isNew />
+      <span className="text-xs text-ink-faint">
+        Filtering by day/DTE will apply once F&amp;O historical data is integrated.
+      </span>
+    </div>
+  );
+}
+
 function YearlyReturnsTable({ rows }: { rows: YearlyReturn[] }) {
   return (
     <div className="overflow-x-auto">
@@ -644,15 +867,46 @@ function YearlyReturnsTable({ rows }: { rows: YearlyReturn[] }) {
   );
 }
 
-function FullReportTable({ trades }: { trades: TradeRow[] }) {
+function downloadTradesCsv(trades: TradeRow[], strategyName: string) {
+  const csv = [
+    ["#", "Symbol", "Gain Type", "Entry Date", "Entry Price", "Exit Date", "Exit Price", "Holding Days", "Qty", "P&L"],
+    ...trades.map((t) => [
+      t.index, t.symbol, t.gain_type, t.entry_date, t.entry_price,
+      t.exit_date, t.exit_price, t.holding_days, t.quantity, t.pnl,
+    ]),
+  ]
+    .map((row) => row.join(","))
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `backtest-trades-${strategyName || "report"}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function FullReportTable({ trades, strategyName }: { trades: TradeRow[]; strategyName: string }) {
   const [showAll, setShowAll] = useState(false);
   const rows = showAll ? trades : trades.slice(0, 10);
 
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <SectionHeading>Full Report</SectionHeading>
-        <span className="text-xs text-ink-faint">{trades.length} trades</span>
+        <div className="flex items-center gap-3">
+          <SectionHeading>Full Report</SectionHeading>
+          <span className="text-xs text-ink-faint">{trades.length} trades</span>
+        </div>
+        {trades.length > 0 && (
+          <Button
+            variant="secondary"
+            className="h-8 px-3 text-xs"
+            onClick={() => downloadTradesCsv(trades, strategyName)}
+          >
+            ↓ Download trades
+          </Button>
+        )}
       </div>
       <Card className="overflow-hidden p-0">
         <div className="max-h-[400px] overflow-y-auto">
@@ -1765,12 +2019,17 @@ export function BacktestClient() {
               <div className="space-y-6">
                 <ResultsHeader />
 
+                <FilterRecalcRow />
+
                 <Card className="p-5">
                   <SummaryStats s={result.summary ?? null} />
                 </Card>
 
                 <div>
-                  <SectionHeading>Year-wise Returns</SectionHeading>
+                  <FilterByRow />
+                  <div className="mt-4">
+                    <SectionHeading>Year-wise Returns</SectionHeading>
+                  </div>
                   <Card className="mt-3 p-5">
                     {result.yearly_returns && result.yearly_returns.length > 0 ? (
                       <YearlyReturnsTable rows={result.yearly_returns} />
@@ -1791,7 +2050,9 @@ export function BacktestClient() {
                   </Card>
                 </div>
 
-                {result.trades && result.trades.length > 0 && <FullReportTable trades={result.trades} />}
+                {result.trades && result.trades.length > 0 && (
+                  <FullReportTable trades={result.trades} strategyName={form.name} />
+                )}
               </div>
             )}
 
