@@ -97,6 +97,18 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Portfolio Backtesting",
     items: [
       {
+        label: "Strategy Backtester",
+        href: "/backtest",
+        description:
+          "Build a multi-leg options strategy and simulate it against historical trade data.",
+        icon: icon(
+          <>
+            <path d="M3 3v18h18" />
+            <path d="M7 16v-4M12 16V8M17 16v-7" />
+          </>
+        ),
+      },
+      {
         label: "Replay",
         href: "/replay",
         description:
