@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1 import health, broker, trade, holding, dashboard, portfolio, realized_gain, tax, tax_export, corporate_action, csv_import, zerodha, upstox, groww, fno_pnl, reconstruction, crypto, harvesting, replay, monte_carlo, ais, admin_itr, billing, journal, journal_analytics, backtest, admin, me
+from app.api.v1 import health, broker, trade, holding, dashboard, portfolio, realized_gain, tax, tax_export, corporate_action, csv_import, zerodha, upstox, groww, fno_pnl, reconstruction, crypto, harvesting, replay, monte_carlo, ais, admin_itr, billing, journal, journal_analytics, backtest, tax_harvest_intelligence, admin, me
 from app.core.config import settings
 
 logger = logging.getLogger("finvigil")
@@ -68,5 +68,6 @@ app.include_router(billing.router, prefix="/api/v1")
 app.include_router(journal.router, prefix="/api/v1")
 app.include_router(journal_analytics.router, prefix="/api/v1")
 app.include_router(backtest.router, prefix="/api/v1")
+app.include_router(tax_harvest_intelligence.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 app.include_router(me.router, prefix="/api/v1")
