@@ -22,8 +22,23 @@ LTCG_EXEMPTION_LIMIT = Decimal("125000")  # Rs 1,25,000 per FY
 LTCG_RATE = Decimal("0.125")  # 12.5%
 STCG_RATE = Decimal("0.20")  # 20%
 LTCG_HOLDING_DAYS = 365  # proxy for "more than 12 months"
-CURRENT_FY_START = date(2025, 4, 1)  # FY 2025-26
-CURRENT_FY_END = date(2026, 3, 31)
+
+
+def _get_current_fy() -> tuple[date, date]:
+    """Returns (fy_start, fy_end) for the current Indian FY (April 1 to
+    March 31), computed from today's date rather than hardcoded — a
+    hardcoded FY goes stale the moment the calendar crosses into the next
+    one and starts reporting a negative "days until FY end"."""
+    today = date.today()
+    if today.month >= 4:
+        # April onwards = new FY has started
+        fy_start = date(today.year, 4, 1)
+        fy_end = date(today.year + 1, 3, 31)
+    else:
+        # Jan-March = still in the FY that started the previous year
+        fy_start = date(today.year - 1, 4, 1)
+        fy_end = date(today.year, 3, 31)
+    return fy_start, fy_end
 
 
 class TaxHarvestingIntelligenceService:
@@ -40,12 +55,13 @@ class TaxHarvestingIntelligenceService:
     # ── core data ────────────────────────────────────────────────────────
 
     def _get_current_fy_realized_gains(self, user_id: UUID) -> list:
-        """All realized gains with sell_date in the current FY
-        (April 1, 2025 to March 31, 2026)."""
+        """All realized gains with sell_date in the current FY (April 1 to
+        March 31, computed from today's date)."""
+        fy_start, fy_end = _get_current_fy()
         all_gains = self.realized_gain_repository.get_by_user(user_id)
         return [
             g for g in all_gains
-            if CURRENT_FY_START <= g.sell_date.date() <= CURRENT_FY_END
+            if fy_start <= g.sell_date.date() <= fy_end
         ]
 
     def _compute_fy_summary(self, fy_gains: list) -> dict:
@@ -107,6 +123,7 @@ class TaxHarvestingIntelligenceService:
         if exemption_remaining <= 0:
             return None
 
+        _, fy_end = _get_current_fy()
         all_lots = self.holding_lot_repository.get_active_lots_by_user(user_id)
         today = date.today()
         ltcg_lots = []
@@ -160,8 +177,8 @@ class TaxHarvestingIntelligenceService:
                 "Actual tax saving depends on current market price. Connect "
                 "your broker for live unrealized P&L calculation."
             ),
-            "fy_deadline": str(CURRENT_FY_END),
-            "days_until_fy_end": (CURRENT_FY_END - today).days,
+            "fy_deadline": str(fy_end),
+            "days_until_fy_end": (fy_end - today).days,
         }
 
     # ── strategy 2: holding period optimizer (STCG -> LTCG) ─────────────
@@ -241,6 +258,7 @@ class TaxHarvestingIntelligenceService:
             return None
 
         all_lots = self.holding_lot_repository.get_active_lots_by_user(user_id)
+        _, fy_end = _get_current_fy()
 
         return {
             "strategy_id": "tax_loss_harvest",
@@ -282,17 +300,20 @@ class TaxHarvestingIntelligenceService:
                 "ltcg_loss_vs_stcg_gain": False,
                 "ltcg_loss_vs_ltcg_gain": True,
             },
-            "fy_deadline": str(CURRENT_FY_END),
+            "fy_deadline": str(fy_end),
         }
 
     # ── strategy 4: financial year boundary splitting ───────────────────
 
     def strategy_fy_boundary_split(self, user_id: UUID, fy_summary: dict) -> dict | None:
         today = date.today()
-        days_until_fy_end = (CURRENT_FY_END - today).days
+        _, fy_end = _get_current_fy()
+        days_until_fy_end = (fy_end - today).days
 
-        # Most relevant in Feb-March (within 90 days of FY end).
-        if days_until_fy_end > 90:
+        # Most relevant in Feb-March (within 90 days of FY end). A negative
+        # value means the FY has already ended (stale computation, or this
+        # ran right at the rollover) -- not applicable either way.
+        if days_until_fy_end < 0 or days_until_fy_end > 90:
             return None
 
         exemption_remaining = Decimal(str(fy_summary["ltcg_exemption_remaining"]))
@@ -311,7 +332,7 @@ class TaxHarvestingIntelligenceService:
             "priority": "HIGH" if days_until_fy_end <= 45 else "MEDIUM",
             "priority_color": "warning",
             "days_until_fy_end": days_until_fy_end,
-            "fy_deadline": str(CURRENT_FY_END),
+            "fy_deadline": str(fy_end),
             "exemption_this_fy": float(exemption_remaining),
             "exemption_next_fy": float(next_fy_exemption),
             "total_tax_free_gains_possible": float(total_available),
@@ -482,6 +503,10 @@ class TaxHarvestingIntelligenceService:
         priority_order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
         strategies.sort(key=lambda s: priority_order.get(s.get("priority", "LOW"), 2))
 
+        fy_start, fy_end = _get_current_fy()
+        fy_label = f"FY {fy_start.year}-{str(fy_end.year)[2:]} (AY {fy_end.year}-{str(fy_end.year + 1)[2:]})"
+        assessment_year = f"AY {fy_end.year}-{str(fy_end.year + 1)[2:]}"
+
         return {
             "fy_summary": fy_summary,
             "strategies": strategies,
@@ -489,8 +514,8 @@ class TaxHarvestingIntelligenceService:
             "potential_tax_saving": sum(
                 s.get("tax_saving_estimate", 0) for s in strategies
             ),
-            "current_fy": "FY 2025-26 (AY 2026-27)",
-            "assessment_year": "AY 2026-27",
+            "current_fy": fy_label,
+            "assessment_year": assessment_year,
             "rates": {
                 "stcg_rate_pct": 20.0,
                 "ltcg_rate_pct": 12.5,

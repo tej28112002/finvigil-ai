@@ -158,11 +158,15 @@ def test_loss_carry_forward_returns_none_when_no_net_loss():
 
 
 def test_compute_all_strategies_returns_valid_structure():
+    # sell_date must fall inside the *current* FY window, which is now
+    # computed dynamically from today's date rather than hardcoded -- so
+    # "today" is always inside it, unlike a fixed literal date would be
+    # once the calendar rolls past that FY.
     gains = [
         FakeGain(
             gain_type="LTCG",
             profit_loss=Decimal("50000"),
-            sell_date=datetime(2025, 6, 1),
+            sell_date=datetime.now(),
         ),
     ]
     lots = [
