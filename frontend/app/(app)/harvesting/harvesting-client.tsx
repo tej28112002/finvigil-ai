@@ -94,6 +94,22 @@ interface IntelligenceResponse {
   disclaimer: string;
 }
 
+interface BrokerConnection {
+  id: string;
+  broker_name: string;
+  status: string;
+}
+
+const BROKER_LOGIN_URLS: Record<string, string> = {
+  zerodha: "https://kite.zerodha.com",
+  upstox: "https://pro.upstox.com",
+  groww: "https://groww.in",
+};
+
+function brokerLabel(brokerName: string): string {
+  return brokerName.charAt(0).toUpperCase() + brokerName.slice(1);
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function rupeeStr(v: number | null | undefined): string {
@@ -115,9 +131,20 @@ function PriorityBadge({ priority }: { priority: string }) {
   return <Badge tone={tone}>{priority}</Badge>;
 }
 
-// ── implement-manually modal ────────────────────────────────────────────────
+// ── step-by-step guide modal ────────────────────────────────────────────────
 
-function ImplementModal({ strategy, onClose }: { strategy: Strategy; onClose: () => void }) {
+function ImplementModal({
+  strategy,
+  brokers,
+  onClose,
+}: {
+  strategy: Strategy;
+  brokers: BrokerConnection[];
+  onClose: () => void;
+}) {
+  const activeBroker = brokers.find((b) => b.status === "active");
+  const brokerUrl = activeBroker ? BROKER_LOGIN_URLS[activeBroker.broker_name] : null;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -128,7 +155,7 @@ function ImplementModal({ strategy, onClose }: { strategy: Strategy; onClose: ()
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-md border border-rule bg-surface p-6 shadow-token-sm">
         <div className="flex items-start justify-between gap-3">
           <h2 id="implement-modal-title" className="font-display text-lg text-ink">
-            {strategy.title}
+            How to Implement This Strategy
           </h2>
           <button
             type="button"
@@ -142,11 +169,21 @@ function ImplementModal({ strategy, onClose }: { strategy: Strategy; onClose: ()
           </button>
         </div>
 
-        <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-ink">
+        <p className="mt-3 text-sm text-ink-muted">
+          Complete these steps in your broker account (Zerodha / Upstox / Groww):
+        </p>
+
+        <ul className="mt-3 space-y-2.5 text-sm text-ink">
           {strategy.instructions.map((step, i) => (
-            <li key={i}>{step}</li>
+            <li key={i} className="flex items-start gap-2.5">
+              <input type="checkbox" disabled className="mt-1 shrink-0" aria-hidden="true" />
+              <span>
+                <span className="font-medium text-ink-muted">Step {i + 1}: </span>
+                {step}
+              </span>
+            </li>
           ))}
-        </ol>
+        </ul>
 
         {strategy.legal_basis && (
           <p className="mt-4 text-xs text-ink-faint">
@@ -155,15 +192,29 @@ function ImplementModal({ strategy, onClose }: { strategy: Strategy; onClose: ()
           </p>
         )}
 
-        <div className="mt-4 rounded-md border border-loss/30 bg-loss-soft px-3 py-2.5 text-xs text-loss">
-          FinVigil does not execute trades. These are educational instructions
-          only. Execute through your broker account.
+        <div className="mt-4 flex items-start gap-2 rounded-md border border-brand/30 bg-surface px-3 py-2.5 text-xs text-ink-muted">
+          <span aria-hidden="true">ℹ</span>
+          <span>
+            These are step-by-step instructions for you to execute in your
+            broker account. FinVigil is a read-only platform and does not
+            place trades on your behalf.
+          </span>
         </div>
 
-        <div className="mt-5 flex justify-end">
-          <Button variant="secondary" onClick={onClose}>
-            Close
-          </Button>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          {activeBroker && brokerUrl ? (
+            <Button
+              variant="secondary"
+              onClick={() => window.open(brokerUrl, "_blank", "noopener,noreferrer")}
+            >
+              Open {brokerLabel(activeBroker.broker_name)} →
+            </Button>
+          ) : (
+            <Button variant="secondary" onClick={() => (window.location.href = "/brokers")}>
+              Go to Brokers →
+            </Button>
+          )}
+          <Button onClick={onClose}>Close</Button>
         </div>
       </div>
     </div>
@@ -381,8 +432,11 @@ function StrategyCard({
           )}
           <div className="mt-3">
             <Button variant="secondary" className="h-8 px-3 text-xs" onClick={() => onImplement(strategy)}>
-              IMPLEMENT MANUALLY →
+              📋 Step-by-Step Guide
             </Button>
+            <p className="mt-1.5 text-xs text-ink-faint">
+              Execute through your Zerodha / Upstox / Groww account
+            </p>
           </div>
         </div>
       )}
@@ -465,6 +519,7 @@ export function HarvestingClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalStrategy, setModalStrategy] = useState<Strategy | null>(null);
+  const [brokers, setBrokers] = useState<BrokerConnection[]>([]);
 
   useEffect(() => {
     apiFetch<IntelligenceResponse>("/tax-harvest/intelligence")
@@ -473,6 +528,9 @@ export function HarvestingClient() {
         setError(err instanceof Error ? err.message : "Could not load tax-saving recommendations.")
       )
       .finally(() => setLoading(false));
+    apiFetch<BrokerConnection[]>("/brokers/")
+      .then(setBrokers)
+      .catch(() => setBrokers([]));
   }, []);
 
   const fy = data?.fy_summary ?? null;
@@ -630,7 +688,9 @@ export function HarvestingClient() {
         </p>
       </Card>
 
-      {modalStrategy && <ImplementModal strategy={modalStrategy} onClose={() => setModalStrategy(null)} />}
+      {modalStrategy && (
+        <ImplementModal strategy={modalStrategy} brokers={brokers} onClose={() => setModalStrategy(null)} />
+      )}
     </div>
   );
 }
