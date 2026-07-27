@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, MetricLabel } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { BrokerActionsBar } from "@/components/shared/broker-actions-bar";
 import { apiFetch, ApiError } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 
@@ -380,15 +381,20 @@ export function JournalClient() {
     }
   }
 
+  function loadAnalytics() {
+    setAnalyticsLoading(true);
+    apiFetch<AnalyticsResponse>("/journal/analytics")
+      .then((data) => setAnalytics(data))
+      .catch(() => setAnalytics(null))
+      .finally(() => setAnalyticsLoading(false));
+  }
+
   useEffect(() => {
     apiFetch<{ tags: Record<string, string> }>("/journal/tags/taxonomy")
       .then((r) => setTaxonomy(r.tags))
       .catch(() => setTaxonomy({}));
     loadEntries();
-    apiFetch<AnalyticsResponse>("/journal/analytics")
-      .then((data) => setAnalytics(data))
-      .catch(() => setAnalytics(null))
-      .finally(() => setAnalyticsLoading(false));
+    loadAnalytics();
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setMicUnsupported(true);
     }
@@ -518,6 +524,13 @@ export function JournalClient() {
           Your trading performance, automatically computed from your trade history.
         </p>
       </div>
+
+      <BrokerActionsBar
+        onUploadSuccess={() => {
+          loadAnalytics();
+          loadEntries();
+        }}
+      />
 
       {hasNoData ? (
         <EmptyState

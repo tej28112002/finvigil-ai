@@ -48,6 +48,29 @@ class FakeHoldingLotRepository:
     def get_open_lots(self, user_id, instrument_id) -> list[FakeLot]:
         return self.lots
 
+    def create_lot(
+        self,
+        user_id,
+        broker_connection_id,
+        instrument_id,
+        source_trade_id,
+        quantity_bought,
+        remaining_quantity,
+        buy_price,
+        buy_date,
+        status,
+    ) -> FakeLot:
+        lot = FakeLot(
+            quantity_remaining=remaining_quantity,
+            buy_price=buy_price,
+            buy_date=buy_date,
+            instrument_id=instrument_id,
+            status=status,
+            quantity_bought=quantity_bought,
+        )
+        self.lots.append(lot)
+        return lot
+
     def get_active_lots_by_user(self, user_id) -> list[FakeLot]:
         return self.lots
 
@@ -68,6 +91,44 @@ class FakeHoldingLotRepository:
         lot.quantity_remaining = new_quantity_remaining
         lot.buy_price = new_buy_price
         return lot
+
+
+@dataclass
+class FakeTrade:
+    """Stands in for app.models.trade.Trade."""
+    idempotency_hash: str
+    trade_type: str = "buy"
+    quantity: Decimal = Decimal("0")
+    price: Decimal = Decimal("0")
+    id: UUID = field(default_factory=uuid4)
+    user_id: UUID = field(default_factory=uuid4)
+    instrument_id: UUID = field(default_factory=uuid4)
+    broker_connection_id: UUID = field(default_factory=uuid4)
+    broker_trade_id: str = ""
+    execution_time: datetime | None = None
+
+
+class FakeTradeRepository:
+    def __init__(self, trades: list[FakeTrade] | None = None):
+        self.trades = trades or []
+
+    def get_by_user(self, user_id) -> list[FakeTrade]:
+        return self.trades
+
+    def create_trade(self, **kwargs) -> FakeTrade:
+        trade = FakeTrade(
+            idempotency_hash=kwargs["idempotency_hash"],
+            trade_type=kwargs.get("trade_type", "buy"),
+            quantity=kwargs.get("quantity", Decimal("0")),
+            price=kwargs.get("price", Decimal("0")),
+            user_id=kwargs.get("user_id", uuid4()),
+            instrument_id=kwargs.get("instrument_id", uuid4()),
+            broker_connection_id=kwargs.get("broker_connection_id", uuid4()),
+            broker_trade_id=kwargs.get("broker_trade_id", ""),
+            execution_time=kwargs.get("execution_time"),
+        )
+        self.trades.append(trade)
+        return trade
 
 
 @dataclass
@@ -155,11 +216,31 @@ class FakeAisLine:
 
 
 class FakeInstrumentRepository:
-    def __init__(self, instruments: dict[UUID, FakeInstrument]):
-        self.instruments = instruments
+    def __init__(self, instruments: dict[UUID, FakeInstrument] | None = None):
+        self.instruments = instruments or {}
 
     def get_by_id(self, instrument_id):
         return self.instruments.get(instrument_id)
+
+    def get_by_symbol(self, symbol: str) -> FakeInstrument | None:
+        return next((i for i in self.instruments.values() if i.symbol == symbol), None)
+
+    def get_by_isin(self, isin: str) -> FakeInstrument | None:
+        return next((i for i in self.instruments.values() if i.isin == isin), None)
+
+    def get_or_create(
+        self, symbol: str, instrument_type: str, name: str, isin: str | None = None
+    ) -> FakeInstrument:
+        if isin is not None:
+            existing = self.get_by_isin(isin)
+            if existing:
+                return existing
+        existing = self.get_by_symbol(symbol)
+        if existing:
+            return existing
+        instrument = FakeInstrument(symbol=symbol, instrument_type=instrument_type, isin=isin)
+        self.instruments[instrument.id] = instrument
+        return instrument
 
 
 class FakeItrSchemaRepository:
