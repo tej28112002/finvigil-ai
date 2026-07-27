@@ -227,65 +227,75 @@ class ZerodhaService:
                 else:
                     instrument_type = "equity"
 
-                instrument = self.instrument_repository.get_or_create(
-                    symbol=trade["tradingsymbol"],
-                    instrument_type=instrument_type,
-                    name=trade["tradingsymbol"],
-                    isin=None,
-                )
-
-                try:
-                    execution_time = datetime.strptime(
-                        trade["fill_timestamp"],
-                        "%Y-%m-%d %H:%M:%S",
+                # A duplicate idempotency_hash (re-syncing a trade already
+                # imported) raises IntegrityError on flush -- without a
+                # savepoint boundary, that leaves the whole request's shared
+                # session in an aborted-transaction state, so every DB call
+                # after it (later trades in this loop, sync_holdings'
+                # follow-on trades, the dashboard projection update, even
+                # get_db()'s own final commit) fails too, turning one
+                # already-imported trade into a full 500 for the entire
+                # sync. The savepoint scopes the rollback to just this trade.
+                with self.instrument_repository.db.begin_nested():
+                    instrument = self.instrument_repository.get_or_create(
+                        symbol=trade["tradingsymbol"],
+                        instrument_type=instrument_type,
+                        name=trade["tradingsymbol"],
+                        isin=None,
                     )
-                except (ValueError, TypeError):
-                    execution_time = datetime.now()
 
-                idempotency_hash = generate_trade_idempotency_hash(
-                    broker_connection_id=broker_connection_id,
-                    broker_trade_id=str(trade["trade_id"]),
-                )
-
-                trade_type = trade["transaction_type"].lower()
-                quantity = Decimal(str(trade["quantity"]))
-                price = Decimal(str(trade["average_price"]))
-
-                if instrument_type == "fno":
-                    if trade_type == "sell":
-                        self.trade_service.process_fno_sell_trade(
-                            user_id=user_id,
-                            instrument_id=instrument.id,
-                            broker_connection_id=broker_connection_id,
-                            broker_trade_id=str(trade["trade_id"]),
-                            quantity=quantity,
-                            price=price,
-                            execution_time=execution_time,
-                            idempotency_hash=idempotency_hash,
+                    try:
+                        execution_time = datetime.strptime(
+                            trade["fill_timestamp"],
+                            "%Y-%m-%d %H:%M:%S",
                         )
-                    else:
-                        self.trade_service.process_fno_buy_trade(
-                            user_id=user_id,
-                            instrument_id=instrument.id,
-                            broker_connection_id=broker_connection_id,
-                            broker_trade_id=str(trade["trade_id"]),
-                            quantity=quantity,
-                            price=price,
-                            execution_time=execution_time,
-                            idempotency_hash=idempotency_hash,
-                        )
-                else:
-                    self.trade_service.process_trade(
-                        trade_type=trade_type,
-                        user_id=user_id,
-                        instrument_id=instrument.id,
+                    except (ValueError, TypeError):
+                        execution_time = datetime.now()
+
+                    idempotency_hash = generate_trade_idempotency_hash(
                         broker_connection_id=broker_connection_id,
                         broker_trade_id=str(trade["trade_id"]),
-                        quantity=quantity,
-                        price=price,
-                        execution_time=execution_time,
-                        idempotency_hash=idempotency_hash,
                     )
+
+                    trade_type = trade["transaction_type"].lower()
+                    quantity = Decimal(str(trade["quantity"]))
+                    price = Decimal(str(trade["average_price"]))
+
+                    if instrument_type == "fno":
+                        if trade_type == "sell":
+                            self.trade_service.process_fno_sell_trade(
+                                user_id=user_id,
+                                instrument_id=instrument.id,
+                                broker_connection_id=broker_connection_id,
+                                broker_trade_id=str(trade["trade_id"]),
+                                quantity=quantity,
+                                price=price,
+                                execution_time=execution_time,
+                                idempotency_hash=idempotency_hash,
+                            )
+                        else:
+                            self.trade_service.process_fno_buy_trade(
+                                user_id=user_id,
+                                instrument_id=instrument.id,
+                                broker_connection_id=broker_connection_id,
+                                broker_trade_id=str(trade["trade_id"]),
+                                quantity=quantity,
+                                price=price,
+                                execution_time=execution_time,
+                                idempotency_hash=idempotency_hash,
+                            )
+                    else:
+                        self.trade_service.process_trade(
+                            trade_type=trade_type,
+                            user_id=user_id,
+                            instrument_id=instrument.id,
+                            broker_connection_id=broker_connection_id,
+                            broker_trade_id=str(trade["trade_id"]),
+                            quantity=quantity,
+                            price=price,
+                            execution_time=execution_time,
+                            idempotency_hash=idempotency_hash,
+                        )
                 imported += 1
 
             except Exception as e:
@@ -394,40 +404,47 @@ class ZerodhaService:
                 if quantity <= 0 or avg_price <= 0:
                     continue
 
-                instrument = self.instrument_repository.get_or_create(
-                    symbol=symbol,
-                    instrument_type="equity",
-                    name=symbol,
-                    isin=isin,
-                )
+                # Savepoint-scoped: a write failure for one holding (e.g. a
+                # stale idempotency-hash collision on resync) must not abort
+                # the shared request-level transaction -- see the matching
+                # comment in sync_today_trades for why that would otherwise
+                # take down every holding after it, plus the trades sync and
+                # dashboard update that follow in the same request.
+                with self.instrument_repository.db.begin_nested():
+                    instrument = self.instrument_repository.get_or_create(
+                        symbol=symbol,
+                        instrument_type="equity",
+                        name=symbol,
+                        isin=isin,
+                    )
 
-                existing_lots = self.holding_lot_repository.get_open_lots(
-                    user_id=user_id,
-                    instrument_id=instrument.id,
-                )
-                if existing_lots:
-                    lot = existing_lots[0]
-                    self.holding_lot_repository.update_remaining_quantity(
-                        lot=lot,
-                        remaining_quantity=quantity,
-                        status="open",
-                    )
-                else:
-                    broker_trade_id = f"holding:{symbol}"
-                    idempotency_hash = generate_trade_idempotency_hash(
-                        broker_connection_id=broker_connection_id,
-                        broker_trade_id=broker_trade_id,
-                    )
-                    self.trade_service.process_buy_trade(
+                    existing_lots = self.holding_lot_repository.get_open_lots(
                         user_id=user_id,
                         instrument_id=instrument.id,
-                        broker_connection_id=broker_connection_id,
-                        broker_trade_id=broker_trade_id,
-                        quantity=quantity,
-                        price=avg_price,
-                        execution_time=datetime.now(timezone.utc),
-                        idempotency_hash=idempotency_hash,
                     )
+                    if existing_lots:
+                        lot = existing_lots[0]
+                        self.holding_lot_repository.update_remaining_quantity(
+                            lot=lot,
+                            remaining_quantity=quantity,
+                            status="open",
+                        )
+                    else:
+                        broker_trade_id = f"holding:{symbol}"
+                        idempotency_hash = generate_trade_idempotency_hash(
+                            broker_connection_id=broker_connection_id,
+                            broker_trade_id=broker_trade_id,
+                        )
+                        self.trade_service.process_buy_trade(
+                            user_id=user_id,
+                            instrument_id=instrument.id,
+                            broker_connection_id=broker_connection_id,
+                            broker_trade_id=broker_trade_id,
+                            quantity=quantity,
+                            price=avg_price,
+                            execution_time=datetime.now(timezone.utc),
+                            idempotency_hash=idempotency_hash,
+                        )
                 synced_count += 1
             except Exception as e:
                 errors.append(f"{symbol or '?'}: {e}")
