@@ -6,6 +6,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.v1.dashboard import get_dashboard_service
 from app.core.auth import get_current_user_id
 from app.core.config import settings
 from app.db.session import get_db
@@ -17,7 +18,8 @@ from app.repositories.instrument_repository import InstrumentRepository
 from app.repositories.realized_gain_repository import RealizedGainRepository
 from app.repositories.trade_repository import TradeRepository
 from app.repositories.vault_repository import VaultRepository
-from app.schemas.csv_import import CsvImportResponse
+from app.schemas.broker import BrokerSyncResponse
+from app.services.dashboard_service import DashboardService
 from app.services.holding_service import HoldingLotService
 from app.services.trade_service import TradeService
 from app.services.upstox_service import UpstoxService
@@ -43,6 +45,7 @@ def get_upstox_service(
             realized_gain_repository=RealizedGainRepository(db),
         ),
         instrument_repository=InstrumentRepository(db),
+        holding_lot_repository=HoldingLotRepository(db),
     )
 
 
@@ -88,17 +91,21 @@ def upstox_callback(
 
 @router.post(
     "/brokers/upstox/sync",
-    response_model=CsvImportResponse
+    response_model=BrokerSyncResponse
 )
 def sync_upstox_trades(
     broker_connection_id: UUID,
     service: UpstoxService = Depends(get_upstox_service),
     user_id: UUID = Depends(get_current_user_id),
+    dashboard_service: DashboardService = Depends(get_dashboard_service),
 ):
-    try:
-        return service.sync_today_trades(
-            user_id=user_id,
-            broker_connection_id=broker_connection_id,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    result = service.sync_broker(
+        user_id=user_id,
+        broker_connection_id=broker_connection_id,
+    )
+    if result.get("success"):
+        try:
+            dashboard_service.calculate_and_update_projection(user_id=user_id)
+        except Exception:
+            pass
+    return BrokerSyncResponse(**result)

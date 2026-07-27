@@ -33,6 +33,27 @@ interface CsvImportResult {
   errors: string[];
 }
 
+interface BrokerSyncResult {
+  success: boolean;
+  trades_imported: number;
+  trades_skipped: number;
+  holdings_synced: number;
+  errors: string[];
+  error?: string | null;
+  error_code?: string | null;
+  message?: string | null;
+}
+
+function syncErrorMessage(result: BrokerSyncResult, brokerLabel: string): string {
+  if (result.error_code === "TOKEN_EXPIRED") {
+    return `Your ${brokerLabel} session has expired. Click "Reconnect" to get a fresh access token. ${brokerLabel} tokens expire daily.`;
+  }
+  if (result.error_code === "MISSING_CREDENTIALS") {
+    return `API credentials not found. Please disconnect and reconnect your ${brokerLabel} account.`;
+  }
+  return result.error || "Sync failed. Please try again.";
+}
+
 function lastSyncedKey(brokerName: string): string {
   return `finvigil-last-synced-${brokerName}`;
 }
@@ -79,7 +100,8 @@ function BrokersPageInner() {
   >(null);
 
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<CsvImportResult | null>(null);
+  const [syncResult, setSyncResult] = useState<BrokerSyncResult | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [zerodhaLastSynced, setZerodhaLastSynced] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
 
@@ -91,7 +113,8 @@ function BrokersPageInner() {
 
   // Upstox
   const [upstoxSyncing, setUpstoxSyncing] = useState(false);
-  const [upstoxSyncResult, setUpstoxSyncResult] = useState<CsvImportResult | null>(null);
+  const [upstoxSyncResult, setUpstoxSyncResult] = useState<BrokerSyncResult | null>(null);
+  const [upstoxSyncError, setUpstoxSyncError] = useState<string | null>(null);
   const [upstoxLastSynced, setUpstoxLastSynced] = useState<string | null>(null);
   const [upstoxConnecting, setUpstoxConnecting] = useState(false);
   const [upstoxApiKey, setUpstoxApiKey] = useState("");
@@ -242,17 +265,24 @@ function BrokersPageInner() {
     if (!zerodha) return;
     setSyncing(true);
     setSyncResult(null);
-    setError(null);
+    setSyncError(null);
     try {
-      const result = await apiFetch<CsvImportResult>(
+      const result = await apiFetch<BrokerSyncResult>(
         `/brokers/zerodha/sync?broker_connection_id=${zerodha.id}`,
         { method: "POST" }
       );
-      setSyncResult(result);
-      writeLastSynced("zerodha");
-      setZerodhaLastSynced(readLastSynced("zerodha"));
+      if (result.success) {
+        setSyncResult(result);
+        writeLastSynced("zerodha");
+        setZerodhaLastSynced(readLastSynced("zerodha"));
+        load();
+      } else {
+        setSyncError(syncErrorMessage(result, "Zerodha"));
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sync failed");
+      setSyncError(
+        err instanceof Error ? err.message : "Could not connect to server. Check your connection."
+      );
     } finally {
       setSyncing(false);
     }
@@ -305,17 +335,24 @@ function BrokersPageInner() {
     if (!upstox) return;
     setUpstoxSyncing(true);
     setUpstoxSyncResult(null);
-    setError(null);
+    setUpstoxSyncError(null);
     try {
-      const result = await apiFetch<CsvImportResult>(
+      const result = await apiFetch<BrokerSyncResult>(
         `/brokers/upstox/sync?broker_connection_id=${upstox.id}`,
         { method: "POST" }
       );
-      setUpstoxSyncResult(result);
-      writeLastSynced("upstox");
-      setUpstoxLastSynced(readLastSynced("upstox"));
+      if (result.success) {
+        setUpstoxSyncResult(result);
+        writeLastSynced("upstox");
+        setUpstoxLastSynced(readLastSynced("upstox"));
+        load();
+      } else {
+        setUpstoxSyncError(syncErrorMessage(result, "Upstox"));
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sync failed");
+      setUpstoxSyncError(
+        err instanceof Error ? err.message : "Could not connect to server. Check your connection."
+      );
     } finally {
       setUpstoxSyncing(false);
     }
@@ -494,6 +531,12 @@ function BrokersPageInner() {
                     <> · Last synced {new Date(zerodhaLastSynced).toLocaleString("en-IN")}</>
                   )}
                 </p>
+                {(zerodha?.has_credentials || zerodha?.status === "active") && (
+                  <p className="mt-1 text-xs text-ink-faint">
+                    ℹ Zerodha access tokens expire daily. Click &quot;Reconnect&quot; each
+                    morning before syncing to get a fresh token.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -530,13 +573,18 @@ function BrokersPageInner() {
                       Reconnect
                     </Button>
                     <Button onClick={handleSyncNow} loading={syncing}>
-                      Sync now
+                      {syncing ? "Syncing…" : "Sync now"}
                     </Button>
                   </div>
                   {syncResult && (
-                    <div className="rounded-md border border-rule bg-bg p-3 text-sm text-ink-muted">
-                      Synced: {syncResult.imported} imported, {syncResult.skipped} skipped
-                      {syncResult.errors.length > 0 && `, ${syncResult.errors.length} errors`}.
+                    <div className="rounded-md border border-gain/30 bg-gain-soft p-3 text-sm text-gain" role="status">
+                      ✓ {syncResult.message ||
+                        `Synced ${syncResult.holdings_synced} holdings, ${syncResult.trades_imported} new trades`}
+                    </div>
+                  )}
+                  {syncError && (
+                    <div className="rounded-md border border-loss/30 bg-loss-soft p-3 text-sm text-loss" role="alert">
+                      {syncError}
                     </div>
                   )}
                 </>
@@ -648,6 +696,12 @@ function BrokersPageInner() {
                     <> · Last synced {new Date(upstoxLastSynced).toLocaleString("en-IN")}</>
                   )}
                 </p>
+                {(upstox?.has_credentials || upstox?.status === "active") && (
+                  <p className="mt-1 text-xs text-ink-faint">
+                    ℹ Upstox access tokens expire daily. Click &quot;Reconnect&quot; each
+                    morning before syncing to get a fresh token.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -670,13 +724,18 @@ function BrokersPageInner() {
                       Reconnect
                     </Button>
                     <Button onClick={handleSyncUpstoxNow} loading={upstoxSyncing}>
-                      Sync now
+                      {upstoxSyncing ? "Syncing…" : "Sync now"}
                     </Button>
                   </div>
                   {upstoxSyncResult && (
-                    <div className="rounded-md border border-rule bg-bg p-3 text-sm text-ink-muted">
-                      Synced: {upstoxSyncResult.imported} imported, {upstoxSyncResult.skipped} skipped
-                      {upstoxSyncResult.errors.length > 0 && `, ${upstoxSyncResult.errors.length} errors`}.
+                    <div className="rounded-md border border-gain/30 bg-gain-soft p-3 text-sm text-gain" role="status">
+                      ✓ {upstoxSyncResult.message ||
+                        `Synced ${upstoxSyncResult.holdings_synced} holdings, ${upstoxSyncResult.trades_imported} new trades`}
+                    </div>
+                  )}
+                  {upstoxSyncError && (
+                    <div className="rounded-md border border-loss/30 bg-loss-soft p-3 text-sm text-loss" role="alert">
+                      {upstoxSyncError}
                     </div>
                   )}
                 </>

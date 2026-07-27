@@ -1,9 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from urllib.parse import quote
 from uuid import UUID
 
 from kiteconnect import KiteConnect
+from kiteconnect.exceptions import NetworkException, TokenException
 
 from app.core.idempotency import generate_trade_idempotency_hash
 from app.core.oauth_state import sign_state, verify_state
@@ -11,6 +12,7 @@ from app.models.broker_connection import BrokerConnection
 from app.repositories.broker_connection_repository import (
     BrokerConnectionRepository,
 )
+from app.repositories.holding_lot_repository import HoldingLotRepository
 from app.repositories.instrument_repository import InstrumentRepository
 from app.repositories.vault_repository import VaultRepository
 from app.schemas.csv_import import CsvImportResponse
@@ -31,11 +33,13 @@ class ZerodhaService:
         vault_repository: VaultRepository,
         trade_service: TradeService,
         instrument_repository: InstrumentRepository,
+        holding_lot_repository: HoldingLotRepository | None = None,
     ):
         self.broker_connection_repository = broker_connection_repository
         self.vault_repository = vault_repository
         self.trade_service = trade_service
         self.instrument_repository = instrument_repository
+        self.holding_lot_repository = holding_lot_repository
 
     def get_login_url(
         self,
@@ -303,3 +307,186 @@ class ZerodhaService:
             skipped=skipped,
             errors=errors,
         )
+
+    def sync_holdings(
+        self,
+        user_id: UUID,
+        broker_connection_id: UUID,
+    ) -> dict:
+        """
+        Fetches the user's actual portfolio holdings via Kite's
+        /portfolio/holdings and reflects them as HoldingLots. This is the
+        piece sync_today_trades() was missing: Kite's /trades endpoint
+        only returns orders placed TODAY, so an account with pre-existing
+        holdings (bought before the app was ever connected) legitimately
+        returns 0 trades there -- which is why "Sync now" was showing
+        Rs 0.00 holdings even for a correctly-connected account.
+
+        Holdings are a consolidated snapshot (one row per symbol, single
+        average_price, no per-lot buy date), so each is treated as one
+        lot. holding_lots.source_trade_id is NOT NULL, so a lot can't be
+        inserted directly -- a synthetic buy Trade is created via the same
+        trade_service.process_buy_trade() path used everywhere else,
+        keyed by a stable per-symbol idempotency hash so re-syncing
+        updates the existing lot's quantity instead of duplicating it.
+
+        Returns a result dict rather than raising, so the router can
+        surface a specific, actionable error_code to the frontend instead
+        of a generic 400.
+        """
+        connection = self.broker_connection_repository.get_by_user_and_broker(
+            user_id=user_id,
+            broker_name="zerodha",
+        )
+        if not connection or not connection.api_key or not connection.access_token_kms_id:
+            return {
+                "success": False,
+                "error": (
+                    "API key or access token missing. "
+                    "Please reconnect your Zerodha account."
+                ),
+                "error_code": "MISSING_CREDENTIALS",
+            }
+
+        try:
+            kite = self._get_kite_client(user_id=user_id)
+        except ValueError as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "error_code": "MISSING_CREDENTIALS",
+            }
+
+        try:
+            holdings = kite.holdings()
+        except TokenException:
+            return {
+                "success": False,
+                "error": (
+                    "Access token expired. Please reconnect your Zerodha "
+                    "account to get a fresh token."
+                ),
+                "error_code": "TOKEN_EXPIRED",
+            }
+        except NetworkException as e:
+            return {
+                "success": False,
+                "error": f"Could not reach Zerodha: {e}",
+                "error_code": "NETWORK_ERROR",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Zerodha API error: {e}",
+                "error_code": "API_ERROR",
+            }
+
+        synced_count = 0
+        errors: list[str] = []
+
+        for holding in holdings:
+            symbol = holding.get("tradingsymbol", "")
+            try:
+                isin = holding.get("isin") or None
+                quantity = Decimal(str(holding.get("quantity", 0)))
+                avg_price = Decimal(str(holding.get("average_price", 0)))
+
+                if quantity <= 0 or avg_price <= 0:
+                    continue
+
+                instrument = self.instrument_repository.get_or_create(
+                    symbol=symbol,
+                    instrument_type="equity",
+                    name=symbol,
+                    isin=isin,
+                )
+
+                existing_lots = self.holding_lot_repository.get_open_lots(
+                    user_id=user_id,
+                    instrument_id=instrument.id,
+                )
+                if existing_lots:
+                    lot = existing_lots[0]
+                    self.holding_lot_repository.update_remaining_quantity(
+                        lot=lot,
+                        remaining_quantity=quantity,
+                        status="open",
+                    )
+                else:
+                    broker_trade_id = f"holding:{symbol}"
+                    idempotency_hash = generate_trade_idempotency_hash(
+                        broker_connection_id=broker_connection_id,
+                        broker_trade_id=broker_trade_id,
+                    )
+                    self.trade_service.process_buy_trade(
+                        user_id=user_id,
+                        instrument_id=instrument.id,
+                        broker_connection_id=broker_connection_id,
+                        broker_trade_id=broker_trade_id,
+                        quantity=quantity,
+                        price=avg_price,
+                        execution_time=datetime.now(timezone.utc),
+                        idempotency_hash=idempotency_hash,
+                    )
+                synced_count += 1
+            except Exception as e:
+                errors.append(f"{symbol or '?'}: {e}")
+
+        if connection.status != "active":
+            self.broker_connection_repository.update_status(
+                connection=connection,
+                status="active",
+            )
+
+        return {
+            "success": True,
+            "holdings_synced": synced_count,
+            "errors": errors[:5],
+        }
+
+    def sync_broker(
+        self,
+        user_id: UUID,
+        broker_connection_id: UUID,
+    ) -> dict:
+        """
+        Full "Sync now" action: holdings snapshot (sync_holdings) plus
+        today's executed trades (sync_today_trades). If holdings fails
+        (bad/expired credentials), that error is returned immediately --
+        no point attempting trades with the same broken credentials. If
+        trades fails after holdings already succeeded, that's folded into
+        the errors list rather than failing the whole sync.
+        """
+        holdings_result = self.sync_holdings(
+            user_id=user_id,
+            broker_connection_id=broker_connection_id,
+        )
+        if not holdings_result["success"]:
+            return holdings_result
+
+        trades_imported = 0
+        trades_skipped = 0
+        errors = list(holdings_result.get("errors", []))
+        try:
+            trades_result = self.sync_today_trades(
+                user_id=user_id,
+                broker_connection_id=broker_connection_id,
+            )
+            trades_imported = trades_result.imported
+            trades_skipped = trades_result.skipped
+            errors.extend(trades_result.errors)
+        except ValueError as e:
+            errors.append(f"Today's trades: {e}")
+
+        holdings_synced = holdings_result["holdings_synced"]
+        return {
+            "success": True,
+            "trades_imported": trades_imported,
+            "trades_skipped": trades_skipped,
+            "holdings_synced": holdings_synced,
+            "errors": errors[:5],
+            "message": (
+                f"Synced {holdings_synced} holdings and {trades_imported} "
+                f"new trades from Zerodha."
+            ),
+        }

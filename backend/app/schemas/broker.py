@@ -46,3 +46,19 @@ class BrokerConnectionResponse(BaseModel):
             created_at=connection.created_at,
             updated_at=connection.updated_at,
         )
+
+
+class BrokerSyncResponse(BaseModel):
+    """Response for POST /brokers/{broker}/sync. success=False carries a
+    structured error_code (MISSING_CREDENTIALS / TOKEN_EXPIRED / API_ERROR /
+    TIMEOUT / NETWORK_ERROR) so the frontend can show an actionable message
+    instead of a generic failure banner."""
+
+    success: bool
+    trades_imported: int = 0
+    trades_skipped: int = 0
+    holdings_synced: int = 0
+    errors: list[str] = []
+    error: str | None = None
+    error_code: str | None = None
+    message: str | None = None
