@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,6 +10,8 @@ from app.repositories.backtest_repository import BacktestRepository
 from app.repositories.realized_gain_repository import RealizedGainRepository
 from app.schemas.backtest import LegInput, RunResponse, StrategyInput, StrategyResponse
 from app.services.backtest_service import BacktestService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -106,7 +109,7 @@ def run_backtest(
         result = service.run_backtest(strategy, user_id)
         run = repo.update_run(run, status=result.get("status", "completed"), result_json=result)
     except Exception as e:
-        print(f"[FINVIGIL] backtest run failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] backtest run failed: {type(e).__name__}: {e}")
         run = repo.update_run(run, status="failed", error=str(e))
     return run
 

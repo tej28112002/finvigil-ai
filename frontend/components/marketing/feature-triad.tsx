@@ -24,7 +24,7 @@ const FEATURES: Feature[] = [
   {
     title: "Multi-broker consolidation",
     description:
-      "Zerodha, Angel One, Upstox and more — every holding pulled into one FIFO-tracked portfolio, one total value.",
+      "Zerodha, Upstox, Groww and more — every holding pulled into one FIFO-tracked portfolio, one total value.",
     illustration: (
       <svg width="120" height="72" viewBox="0 0 120 72" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         {/* three sources converging into one node */}

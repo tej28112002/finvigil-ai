@@ -21,8 +21,22 @@ export function MarketingFooter() {
             <a href="#features" className="text-ink-muted hover:text-ink">
               Features
             </a>
-            <span className="text-ink-faint">Privacy</span>
-            <span className="text-ink-faint">Terms</span>
+            <a
+              href="#"
+              title="Coming soon"
+              aria-label="Privacy policy (coming soon)"
+              className="text-ink-faint hover:text-ink-muted"
+            >
+              Privacy
+            </a>
+            <a
+              href="#"
+              title="Coming soon"
+              aria-label="Terms of service (coming soon)"
+              className="text-ink-faint hover:text-ink-muted"
+            >
+              Terms
+            </a>
           </nav>
         </div>
 

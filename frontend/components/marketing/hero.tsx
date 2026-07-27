@@ -35,13 +35,13 @@ export function Hero() {
             <span className="italic text-brand">Zero tax surprises.</span>
           </h1>
           <p className="mt-6 max-w-md text-base text-ink-muted">
-            Connect Zerodha, Angel One, Upstox and more. FinVigil consolidates
+            Connect Zerodha, Upstox, Groww and more. FinVigil consolidates
             every holding, runs the FIFO cost basis, and computes your equity,
             F&amp;O and crypto tax — read-only, always.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link href="/login">
+            <Link href="/login?mode=signup">
               <Button variant="primary" className="h-11 px-6 text-base">
                 Get started
               </Button>

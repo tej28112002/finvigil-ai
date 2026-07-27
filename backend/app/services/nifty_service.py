@@ -10,9 +10,12 @@ round-trips.  No Redis — an in-process dict is sufficient.
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import date, timedelta
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 
 # Module-level cache: key -> (unix_timestamp, xirr_or_None)
 _NIFTY_CACHE: dict[str, tuple[float, float | None]] = {}
@@ -134,9 +137,8 @@ class NiftyService:
             return result
 
         except Exception as e:
-            print(
-                f"[FINVIGIL] nifty_service failed in get_nifty_xirr: {type(e).__name__}: {e}",
-                flush=True,
+            logger.warning(
+                f"[FINVIGIL] nifty_service failed in get_nifty_xirr: {type(e).__name__}: {e}"
             )
             return None
 
@@ -159,10 +161,9 @@ class NiftyService:
                 start=str(start), end=str(end + timedelta(days=1))
             )
             if hist.empty or "Close" not in hist.columns:
-                print(
+                logger.debug(
                     f"[FINVIGIL] nifty_service._get_cached_prices({ticker}): empty "
-                    f"history or no Close column returned",
-                    flush=True,
+                    f"history or no Close column returned"
                 )
                 _PRICE_CACHE[cache_key] = (time.time(), None)
                 return None
@@ -174,10 +175,9 @@ class NiftyService:
             return prices
 
         except Exception as e:
-            print(
+            logger.warning(
                 f"[FINVIGIL] nifty_service failed in _get_cached_prices({ticker}): "
-                f"{type(e).__name__}: {e}",
-                flush=True,
+                f"{type(e).__name__}: {e}"
             )
             _PRICE_CACHE[cache_key] = (time.time(), None)
             return None
@@ -203,9 +203,8 @@ class NiftyService:
         any unexpected error (network, empty history, etc).
         """
         if not lots or not trades:
-            print(
-                "[FINVIGIL] daily_series early return: no lots or no trades",
-                flush=True,
+            logger.debug(
+                "[FINVIGIL] daily_series early return: no lots or no trades"
             )
             return None
 
@@ -218,20 +217,18 @@ class NiftyService:
         try:
             dated_trades = [t for t in trades if t.instrument is not None]
             if not dated_trades:
-                print(
+                logger.debug(
                     "[FINVIGIL] daily_series early return: no trades with "
-                    "instrument data",
-                    flush=True,
+                    "instrument data"
                 )
                 return None
 
             earliest = min(t.execution_time.date() for t in dated_trades)
             today = date.today()
             if (today - earliest).days < 30:
-                print(
+                logger.debug(
                     f"[FINVIGIL] daily_series early return: range < 30 days "
-                    f"(earliest={earliest}, today={today})",
-                    flush=True,
+                    f"(earliest={earliest}, today={today})"
                 )
                 return None
 
@@ -243,19 +240,17 @@ class NiftyService:
                     price_series[symbol] = prices
 
             if not price_series:
-                print(
+                logger.debug(
                     "[FINVIGIL] daily_series early return: no price series "
-                    "(all ticker downloads failed or empty)",
-                    flush=True,
+                    "(all ticker downloads failed or empty)"
                 )
                 _PORTFOLIO_SERIES_CACHE[cache_key] = (time.time(), None)
                 return None
 
             nifty_prices = self._get_cached_prices("^NSEI", earliest, today)
             if not nifty_prices:
-                print(
-                    "[FINVIGIL] daily_series early return: no Nifty price series",
-                    flush=True,
+                logger.debug(
+                    "[FINVIGIL] daily_series early return: no Nifty price series"
                 )
                 _PORTFOLIO_SERIES_CACHE[cache_key] = (time.time(), None)
                 return None
@@ -302,29 +297,26 @@ class NiftyService:
                 nifty_values.append(float(nifty_price))
 
             if len(portfolio_values) < 30:
-                print(
+                logger.debug(
                     f"[FINVIGIL] daily_series early return: < 30 valid points "
-                    f"(got {len(portfolio_values)})",
-                    flush=True,
+                    f"(got {len(portfolio_values)})"
                 )
                 _PORTFOLIO_SERIES_CACHE[cache_key] = (time.time(), None)
                 return None
 
             result = (portfolio_values, nifty_values)
-            print(
+            logger.debug(
                 f"[FINVIGIL] daily_series built: len={len(portfolio_values)} "
                 f"first={portfolio_values[0] if portfolio_values else None} "
-                f"last={portfolio_values[-1] if portfolio_values else None}",
-                flush=True,
+                f"last={portfolio_values[-1] if portfolio_values else None}"
             )
             _PORTFOLIO_SERIES_CACHE[cache_key] = (time.time(), result)
             return result
 
         except Exception as e:
-            print(
+            logger.warning(
                 f"[FINVIGIL] nifty_service failed in _build_daily_series: "
-                f"{type(e).__name__}: {e}",
-                flush=True,
+                f"{type(e).__name__}: {e}"
             )
             return None
 
@@ -342,19 +334,17 @@ class NiftyService:
         ]
 
         if len(daily_returns) < 30:
-            print(
+            logger.debug(
                 f"[FINVIGIL] daily_series early return: < 30 valid points "
-                f"(got {len(daily_returns)} returns)",
-                flush=True,
+                f"(got {len(daily_returns)} returns)"
             )
             return None
 
-        print(
+        logger.debug(
             f"[FINVIGIL] daily_series built: "
             f"len={len(daily_returns)} "
             f"first={daily_returns[0] if daily_returns else None} "
-            f"last={daily_returns[-1] if daily_returns else None}",
-            flush=True,
+            f"last={daily_returns[-1] if daily_returns else None}"
         )
         return daily_returns
 
@@ -391,9 +381,8 @@ class NiftyService:
             return float(covariance / nifty_variance)
 
         except Exception as e:
-            print(
-                f"[FINVIGIL] nifty_service failed in compute_beta: {type(e).__name__}: {e}",
-                flush=True,
+            logger.warning(
+                f"[FINVIGIL] nifty_service failed in compute_beta: {type(e).__name__}: {e}"
             )
             return None
 
@@ -410,10 +399,9 @@ class NiftyService:
             return float(annualized * 100)
 
         except Exception as e:
-            print(
+            logger.warning(
                 f"[FINVIGIL] nifty_service failed in compute_volatility: "
-                f"{type(e).__name__}: {e}",
-                flush=True,
+                f"{type(e).__name__}: {e}"
             )
             return None
 
@@ -437,10 +425,9 @@ class NiftyService:
             return float(max_drawdown * 100)
 
         except Exception as e:
-            print(
+            logger.warning(
                 f"[FINVIGIL] nifty_service failed in compute_max_drawdown: "
-                f"{type(e).__name__}: {e}",
-                flush=True,
+                f"{type(e).__name__}: {e}"
             )
             return None
 
@@ -459,9 +446,8 @@ class NiftyService:
             return float((xirr_percent - self.INDIA_RISK_FREE_RATE) / volatility)
 
         except Exception as e:
-            print(
-                f"[FINVIGIL] nifty_service failed in compute_sharpe: {type(e).__name__}: {e}",
-                flush=True,
+            logger.warning(
+                f"[FINVIGIL] nifty_service failed in compute_sharpe: {type(e).__name__}: {e}"
             )
             return None
 
@@ -489,10 +475,9 @@ class NiftyService:
             return float((xirr_percent - self.INDIA_RISK_FREE_RATE) / downside_deviation)
 
         except Exception as e:
-            print(
+            logger.warning(
                 f"[FINVIGIL] nifty_service failed in compute_sortino: "
-                f"{type(e).__name__}: {e}",
-                flush=True,
+                f"{type(e).__name__}: {e}"
             )
             return None
 
@@ -512,8 +497,7 @@ class NiftyService:
             return float(abs(var_pct) * current_value)
 
         except Exception as e:
-            print(
-                f"[FINVIGIL] nifty_service failed in compute_var_95: {type(e).__name__}: {e}",
-                flush=True,
+            logger.warning(
+                f"[FINVIGIL] nifty_service failed in compute_var_95: {type(e).__name__}: {e}"
             )
             return None

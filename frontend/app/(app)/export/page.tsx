@@ -11,6 +11,7 @@ import { Money } from "@/components/ui/money";
 import { Table, THead, Th, Td, Tr } from "@/components/ui/table";
 import { apiFetch } from "@/lib/api";
 import { onboarding } from "@/lib/onboarding";
+import { createClient } from "@/lib/supabase/client";
 
 interface TransactionDetail {
   symbol: string;
@@ -50,6 +51,7 @@ function ExportPageInner() {
   const [ay, setAy] = useState(params.get("ay") ?? DEFAULT_AY);
   const [result, setResult] = useState<CapitalGainsExport | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleGenerate() {
@@ -72,17 +74,62 @@ function ExportPageInner() {
     }
   }
 
-  function handleDownload() {
-    if (!result) return;
-    const blob = new Blob([JSON.stringify(result, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `finvigil-ca-export-${result.assessment_year}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // The on-page summary above is generated JSON (POST /tax/export) --
+  // useful as a preview, but the actual downloadable artifact should be
+  // the real ZIP bundle (POST /tax/ca-bundle) the dashboard's CA Export
+  // card promises, not a re-serialization of that preview JSON.
+  async function handleDownload() {
+    setDownloadingZip(true);
+    setError(null);
+    try {
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        window.location.href = "/login";
+        return;
+      }
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tax/ca-bundle`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ assessment_year: ay }),
+      });
+
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (!res.ok) {
+        let detail = `Request failed (${res.status})`;
+        try {
+          const body = await res.json();
+          if (typeof body?.detail === "string") detail = body.detail;
+        } catch {
+          // non-JSON error body — keep the generic message
+        }
+        throw new Error(detail);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `finvigil-ca-bundle-${today}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not download the CA bundle"
+      );
+    } finally {
+      setDownloadingZip(false);
+    }
   }
 
   return (
@@ -91,8 +138,8 @@ function ExportPageInner() {
         <AYSelector value={ay} onChange={setAy} />
         <div className="flex gap-2">
           {result && (
-            <Button variant="secondary" onClick={handleDownload}>
-              Download JSON
+            <Button variant="secondary" onClick={handleDownload} loading={downloadingZip}>
+              Download CA Bundle (ZIP)
             </Button>
           )}
           <Button onClick={handleGenerate} loading={generating}>

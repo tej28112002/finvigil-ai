@@ -7,6 +7,7 @@ the DB — no external API calls, no yfinance, no Redis.
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
@@ -16,6 +17,8 @@ from app.repositories.dashboard_repository import DashboardRepository
 from app.repositories.holding_lot_repository import HoldingLotRepository
 from app.repositories.realized_gain_repository import RealizedGainRepository
 from app.repositories.trade_repository import TradeRepository
+
+logger = logging.getLogger(__name__)
 
 
 class TradingAnalyticsService:
@@ -311,9 +314,8 @@ class TradingAnalyticsService:
             try:
                 result[key] = method(user_id)
             except Exception as e:
-                print(
-                    f"[FINVIGIL] analytics {key} failed: {type(e).__name__}: {e}",
-                    flush=True,
+                logger.warning(
+                    f"[FINVIGIL] analytics {key} failed: {type(e).__name__}: {e}"
                 )
                 result[key] = None
         return result

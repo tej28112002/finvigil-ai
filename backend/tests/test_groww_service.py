@@ -13,11 +13,13 @@ from uuid import UUID, uuid4
 
 import pytest
 import requests
+from sqlalchemy.exc import IntegrityError
 
 from app.services.groww_service import GrowwService
 from tests.fakes import (
     FakeBrokerConnection,
     FakeBrokerConnectionRepository,
+    FakeDbSession,
     FakeVaultRepository,
 )
 
@@ -41,6 +43,9 @@ class FakeResponse:
 
 class FakeInstrumentRepository:
     """Returns a fresh instrument stub on get_or_create."""
+    def __init__(self):
+        self.db = FakeDbSession()
+
     def get_or_create(self, symbol, instrument_type, name, isin):
         return SimpleNamespace(id=uuid4(), symbol=symbol, instrument_type=instrument_type)
 
@@ -387,5 +392,71 @@ def test_sync_deduplicates_on_idempotency_hash(monkeypatch):
     )
     result = service.sync_today_trades(user_id=user_id, broker_connection_id=conn_id)
     # duplicate errors are counted as skipped, not errors
+    assert result.skipped == 1
+    assert result.errors == []
+
+
+# ---------------------------------------------------------------------------
+# sync_today_trades -- savepoint isolation (FIX 3: a real IntegrityError on
+# one row must not poison the rest of the batch)
+# ---------------------------------------------------------------------------
+
+def test_sync_continues_after_integrity_error_on_one_row(monkeypatch):
+    orders = [
+        make_groww_order(order_id="R1", symbol="SYM1"),
+        make_groww_order(order_id="R2", symbol="SYM2"),
+        make_groww_order(order_id="R3", symbol="SYM3"),
+    ]
+
+    user_id = uuid4()
+    conn_id = uuid4()
+    import pyotp
+
+    repo = FakeBrokerConnectionRepository()
+    vault = FakeVaultRepository()
+    totp_id = vault.create_secret("SECRET", name="t")
+    conn = repo.create_connection(user_id=user_id, broker_name="groww", api_key="k")
+    repo.update_totp_secret_kms_id(conn, str(totp_id))
+
+    class FakeTOTP:
+        def __init__(self, s): pass
+        def now(self): return "000000"
+
+    monkeypatch.setattr(pyotp, "TOTP", FakeTOTP)
+    monkeypatch.setattr(requests, "post", lambda *a, **kw: FakeResponse({"token": "tok"}))
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        segment = (params or {}).get("segment", "CASH")
+        return FakeResponse({"payload": {"order_list": orders if segment == "CASH" else []}})
+
+    monkeypatch.setattr(requests, "get", fake_get)
+
+    class RowFailingTradeService:
+        """Raises a real IntegrityError for the second row only, simulating
+        a duplicate idempotency_hash collision on resync."""
+        def __init__(self):
+            self.calls = 0
+
+        def process_trade(self, **kwargs):
+            self.calls += 1
+            if kwargs["broker_trade_id"] == "R2":
+                raise IntegrityError(
+                    "INSERT INTO trades ...", {},
+                    Exception("duplicate key value violates unique constraint \"trades_idempotency_hash_key\""),
+                )
+
+    trade_svc = RowFailingTradeService()
+    service = GrowwService(
+        broker_connection_repository=repo,
+        vault_repository=vault,
+        trade_service=trade_svc,
+        instrument_repository=FakeInstrumentRepository(),
+    )
+
+    # Must not raise -- the whole point of the savepoint fix.
+    result = service.sync_today_trades(user_id=user_id, broker_connection_id=conn_id)
+
+    assert trade_svc.calls == 3
+    assert result.imported == 2
     assert result.skipped == 1
     assert result.errors == []

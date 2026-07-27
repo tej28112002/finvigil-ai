@@ -448,6 +448,15 @@ function StrategyCard({
 
 function TaxLawReference({ data }: { data: IntelligenceResponse }) {
   const [open, setOpen] = useState(false);
+
+  // assessment_year is computed dynamically on the backend (e.g. "AY
+  // 2027-28" for FY 2026-27), so deriving FY end / ITR deadline from it
+  // here keeps these dates from going stale every year the way a
+  // hardcoded string would.
+  const fyEndYear = parseInt(data.assessment_year.split(" ")[1].split("-")[0], 10);
+  const fyEnd = Number.isFinite(fyEndYear) ? `March 31, ${fyEndYear}` : "March 31";
+  const itrDeadline = Number.isFinite(fyEndYear) ? `July 31, ${fyEndYear}` : "July 31";
+
   return (
     <Card className="mt-8 p-5">
       <button
@@ -502,8 +511,8 @@ function TaxLawReference({ data }: { data: IntelligenceResponse }) {
           <div>
             <h3 className="text-sm font-medium text-ink">Important dates</h3>
             <ul className="mt-2 space-y-1 text-sm text-ink-muted">
-              <li>FY End: March 31, 2026</li>
-              <li>ITR Filing Deadline: July 31, 2026</li>
+              <li>FY End: {fyEnd}</li>
+              <li>ITR Filing Deadline: {itrDeadline}</li>
             </ul>
           </div>
         </div>

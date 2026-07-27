@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 const GOOGLE_LOGIN_ENABLED =
   process.env.NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED === "true";
 
-type Mode = "signin" | "forgot" | "forgot-sent";
+type Mode = "signin" | "signup" | "signup-confirm" | "forgot" | "forgot-sent";
 
 export default function LoginPage() {
   return (
@@ -23,9 +23,16 @@ export default function LoginPage() {
 function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [mode, setMode] = useState<Mode>("signin");
+  // Lets a marketing CTA (homepage "Get started") land straight on the
+  // signup form via /login?mode=signup, instead of always defaulting to
+  // sign-in. Derived at init rather than a useEffect so there's no flash
+  // of the sign-in form before switching.
+  const [mode, setMode] = useState<Mode>(() =>
+    searchParams.get("mode") === "signup" ? "signup" : "signin"
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleNotice, setGoogleNotice] = useState(false);
@@ -66,6 +73,40 @@ function LoginPageInner() {
     }
 
     router.push("/dashboard");
+  }
+
+  async function handleSignupSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords don't match.");
+      return;
+    }
+
+    setLoading(true);
+
+    const supabase = createClient();
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    setLoading(false);
+
+    if (signUpError) {
+      setError(signUpError.message);
+      return;
+    }
+
+    setMode("signup-confirm");
   }
 
   async function handleForgotSubmit(e: React.FormEvent) {
@@ -154,7 +195,93 @@ function LoginPageInner() {
             <Logo markSize={22} wordmarkClassName="text-xl text-ink" />
           </div>
 
-          {mode === "forgot-sent" ? (
+          {mode === "signup-confirm" ? (
+            <div>
+              <h1 className="font-display text-2xl text-ink">Check your email</h1>
+              <p className="mt-2 text-sm text-ink-muted">
+                Check your email — we sent a confirmation link to{" "}
+                <span className="text-ink">{email}</span>. Click the link to
+                activate your account.
+              </p>
+              <button
+                type="button"
+                onClick={() => setMode("signin")}
+                className="mt-6 cursor-pointer text-sm font-medium text-brand hover:text-brand-hover"
+              >
+                ← Back to sign in
+              </button>
+            </div>
+          ) : mode === "signup" ? (
+            <div>
+              <h1 className="font-display text-2xl text-ink">Create your account</h1>
+              <p className="mt-2 text-sm text-ink-muted">
+                Start seeing your complete tax picture in minutes.
+              </p>
+
+              <form onSubmit={handleSignupSubmit} className="mt-6 space-y-4">
+                <Field
+                  id="signup-email"
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={setEmail}
+                  placeholder="you@example.com"
+                />
+                <div>
+                  <label htmlFor="signup-password" className="mb-1.5 block text-sm font-medium text-ink">
+                    Password
+                  </label>
+                  <input
+                    id="signup-password"
+                    type="password"
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint transition-colors duration-200 focus:border-brand"
+                    placeholder="At least 8 characters"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="signup-confirm-password" className="mb-1.5 block text-sm font-medium text-ink">
+                    Confirm password
+                  </label>
+                  <input
+                    id="signup-confirm-password"
+                    type="password"
+                    required
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full rounded-md border border-rule bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint transition-colors duration-200 focus:border-brand"
+                    placeholder="••••••••"
+                  />
+                </div>
+
+                {error && (
+                  <p className="text-sm text-loss" role="alert">
+                    {error}
+                  </p>
+                )}
+
+                <Button type="submit" loading={loading} className="w-full">
+                  {loading ? "Creating account…" : "Create Account"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("signin");
+                    setError(null);
+                    setConfirmPassword("");
+                  }}
+                  className="w-full cursor-pointer text-center text-sm text-ink-muted hover:text-ink"
+                >
+                  Already have an account? Sign in
+                </button>
+              </form>
+            </div>
+          ) : mode === "forgot-sent" ? (
             <div>
               <h1 className="font-display text-2xl text-ink">Check your email</h1>
               <p className="mt-2 text-sm text-ink-muted">
@@ -290,6 +417,16 @@ function LoginPageInner() {
                 <Button type="submit" loading={loading} className="w-full">
                   {loading ? "Signing in…" : "Sign in"}
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("signup");
+                    setError(null);
+                  }}
+                  className="w-full cursor-pointer text-center text-sm text-ink-muted hover:text-ink"
+                >
+                  Don&apos;t have an account? Sign up
+                </button>
               </form>
             </div>
           )}

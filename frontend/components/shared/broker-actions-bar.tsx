@@ -1,9 +1,30 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { apiFetch, ApiError } from "@/lib/api";
+
+function LinkIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 17H7A5 5 0 0 1 7 7h2" />
+      <path d="M15 7h2a5 5 0 1 1 0 10h-2" />
+      <path d="M8 12h8" />
+    </svg>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M17 8l-5-5-5 5" />
+      <path d="M12 3v12" />
+    </svg>
+  );
+}
 
 interface UploadResponse {
   success: boolean;
@@ -19,6 +40,7 @@ interface UploadResponse {
  * kept as one component instead of duplicating the upload panel twice).
  */
 export function BrokerActionsBar({ onUploadSuccess }: { onUploadSuccess?: () => void }) {
+  const router = useRouter();
   const [panelOpen, setPanelOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -75,11 +97,13 @@ export function BrokerActionsBar({ onUploadSuccess }: { onUploadSuccess?: () => 
   return (
     <div className="mb-4">
       <div className="flex flex-wrap gap-3">
-        <Button variant="secondary" onClick={() => (window.location.href = "/brokers")}>
-          🔗 Connect or Sync Broker
+        <Button variant="secondary" onClick={() => router.push("/brokers")}>
+          <LinkIcon />
+          Connect or Sync Broker
         </Button>
         <Button variant="secondary" onClick={() => setPanelOpen((v) => !v)}>
-          📂 Upload Tradebook (CSV / Excel)
+          <UploadIcon />
+          Upload Tradebook (CSV / Excel)
         </Button>
       </div>
 

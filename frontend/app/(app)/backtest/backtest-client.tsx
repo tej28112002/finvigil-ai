@@ -640,15 +640,21 @@ function ResultsHeader() {
 }
 
 // Include Brokerage / Taxes & charges / Slippage / VIX range — all display
-// only for now, none of these feed into the computation yet.
+// only for now, none of these feed into the computation yet. Every control
+// here gives explicit "coming soon" feedback on interaction rather than
+// silently doing nothing, so it can't be mistaken for a working control.
+const RECALC_TOOLTIP =
+  "Recalculation with brokerage/slippage coming soon once F&O data is integrated.";
+const NOT_WIRED_MSG = "This will apply once F&O historical data is integrated.";
+
 function FilterRecalcRow() {
   const [includeBrokerage, setIncludeBrokerage] = useState(false);
   const [taxesCharges, setTaxesCharges] = useState(false);
   const [slippagePct, setSlippagePct] = useState(0);
   const [vixFrom, setVixFrom] = useState(0);
   const [vixTo, setVixTo] = useState(150);
-  const [slippageMsg, setSlippageMsg] = useState<string | null>(null);
-  const [vixMsg, setVixMsg] = useState<string | null>(null);
+  const [brokerageMsg, setBrokerageMsg] = useState<string | null>(null);
+  const [taxesMsg, setTaxesMsg] = useState<string | null>(null);
 
   return (
     <Card className="p-5">
@@ -658,13 +664,20 @@ function FilterRecalcRow() {
           <div>
             <div className="flex items-center gap-2">
               <FieldLabel>Include Brokerage</FieldLabel>
-              <ToggleSwitch checked={includeBrokerage} onChange={setIncludeBrokerage} />
+              <ToggleSwitch
+                checked={includeBrokerage}
+                onChange={(v) => {
+                  setIncludeBrokerage(v);
+                  setBrokerageMsg(v ? NOT_WIRED_MSG : null);
+                }}
+              />
             </div>
             {includeBrokerage ? (
               <input type="text" disabled value="0" className={`${inputCls} mt-1 w-24`} />
             ) : (
               <p className="mt-1 text-xs text-ink-faint">0</p>
             )}
+            {brokerageMsg && <p className="mt-1 text-xs text-ink-faint">{brokerageMsg}</p>}
           </div>
 
           <div>
@@ -673,9 +686,16 @@ function FilterRecalcRow() {
                 Taxes &amp; charges
                 <InfoTip text="Taxes & charges will compute once broker integration provides transaction-level data." />
               </FieldLabel>
-              <ToggleSwitch checked={taxesCharges} onChange={setTaxesCharges} />
+              <ToggleSwitch
+                checked={taxesCharges}
+                onChange={(v) => {
+                  setTaxesCharges(v);
+                  setTaxesMsg(v ? NOT_WIRED_MSG : null);
+                }}
+              />
             </div>
             <p className="mt-1 text-xs text-ink-faint">₹ 0</p>
+            {taxesMsg && <p className="mt-1 text-xs text-ink-faint">{taxesMsg}</p>}
           </div>
 
           <div>
@@ -693,12 +713,13 @@ function FilterRecalcRow() {
               <Button
                 variant="secondary"
                 className="h-8 px-3 text-xs"
-                onClick={() => setSlippageMsg("Slippage recalculation coming soon.")}
+                disabled
+                title={RECALC_TOOLTIP}
               >
                 Re-calculate
               </Button>
             </div>
-            {slippageMsg && <p className="mt-1 text-xs text-ink-faint">{slippageMsg}</p>}
+            <p className="mt-1 text-xs text-ink-faint">{RECALC_TOOLTIP}</p>
           </div>
         </div>
 
@@ -722,12 +743,13 @@ function FilterRecalcRow() {
             <Button
               variant="secondary"
               className="h-8 px-3 text-xs"
-              onClick={() => setVixMsg("VIX range filtering coming soon.")}
+              disabled
+              title={RECALC_TOOLTIP}
             >
               Re-calculate
             </Button>
           </div>
-          {vixMsg && <p className="mt-1 text-xs text-ink-faint">{vixMsg}</p>}
+          <p className="mt-1 text-xs text-ink-faint">{RECALC_TOOLTIP}</p>
         </div>
       </div>
     </Card>
@@ -779,15 +801,20 @@ function cellColor(v: number | null): string {
 
 // Pill-styled <select> — visible label never changes on selection (display
 // only, no filtering logic wired up yet), matching the broker filter chips
-// on the portfolio page.
+// on the portfolio page. onInteract fires on every selection so the caller
+// can surface feedback instead of the control silently doing nothing; the
+// select itself resets to its placeholder so the pill's own label never
+// lies about a filter being applied.
 function PillSelect({
   label,
   options,
   isNew = false,
+  onInteract,
 }: {
   label: string;
   options: string[];
   isNew?: boolean;
+  onInteract?: () => void;
 }) {
   return (
     <div className="relative inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-rule px-3 py-1.5 text-sm font-medium text-ink-muted transition-colors hover:border-rule-strong hover:text-ink">
@@ -798,6 +825,10 @@ function PillSelect({
         defaultValue=""
         aria-label={label}
         className="absolute inset-0 cursor-pointer opacity-0"
+        onChange={(e) => {
+          onInteract?.();
+          e.currentTarget.value = "";
+        }}
       >
         <option value="" disabled />
         {options.map((o) => (
@@ -811,17 +842,30 @@ function PillSelect({
 }
 
 function FilterByRow() {
+  const [msg, setMsg] = useState<string | null>(null);
+  const handleInteract = () => setMsg(NOT_WIRED_MSG);
+
   return (
     <div className="flex flex-wrap items-center gap-3">
       <span className="text-xs font-medium text-ink-muted">Filter by</span>
       <PillSelect
         label="Weekdays"
         options={["All Days", "Weekdays", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]}
+        onInteract={handleInteract}
       />
-      <PillSelect label="DTE" options={["All", "DTE 0", "DTE 1", "DTE 2", "DTE 7"]} />
-      <PillSelect label="Budget Days" options={["Include", "Exclude"]} isNew />
+      <PillSelect
+        label="DTE"
+        options={["All", "DTE 0", "DTE 1", "DTE 2", "DTE 7"]}
+        onInteract={handleInteract}
+      />
+      <PillSelect
+        label="Budget Days"
+        options={["Include", "Exclude"]}
+        isNew
+        onInteract={handleInteract}
+      />
       <span className="text-xs text-ink-faint">
-        Filtering by day/DTE will apply once F&amp;O historical data is integrated.
+        {msg ?? "Filtering by day/DTE will apply once F&O historical data is integrated."}
       </span>
     </div>
   );
