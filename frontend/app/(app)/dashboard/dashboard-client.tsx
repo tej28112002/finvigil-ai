@@ -2,12 +2,31 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, MetricLabel } from "@/components/ui/card";
 
-const QUICK_NAV = [
+interface FeatureCard {
+  title: string;
+  whatItDoes: string;
+  steps: string[];
+  cta: string;
+  href: string;
+  icon: React.ReactNode;
+  wide?: boolean;
+}
+
+const QUICK_NAV: FeatureCard[] = [
   {
     title: "AI Journaling",
-    desc: "Record trade notes and import your tradebook",
+    whatItDoes:
+      "Track your trading performance with automatic analytics. Get win rate, profit factor, Sharpe ratio, and equity curve — all computed from your real trade history. Voice and text note-taking included.",
+    steps: [
+      "Connect your broker or upload a CSV tradebook",
+      "Your trading metrics compute automatically",
+      "Add voice/text notes after each trade session",
+      "Track your consistency over time",
+    ],
+    cta: "Open AI Journaling →",
     href: "/journal",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -19,7 +38,15 @@ const QUICK_NAV = [
   },
   {
     title: "Cross Broker Portfolio",
-    desc: "Invested amount, P&L, XIRR and holdings across all brokers",
+    whatItDoes:
+      "See your complete portfolio across all brokers in one place. Invested amount, current value, P&L, XIRR, Alpha vs Nifty 50, Beta, and risk metrics — all in one view.",
+    steps: [
+      "Connect Zerodha, Upstox, or Groww (or upload CSV)",
+      'Click "Sync all brokers" to fetch latest holdings',
+      "View consolidated metrics across all accounts",
+      "Monitor XIRR and Alpha vs Nifty to track real performance",
+    ],
+    cta: "View Portfolio →",
     href: "/portfolio",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -30,8 +57,16 @@ const QUICK_NAV = [
     ),
   },
   {
-    title: "Tax Harvesting",
-    desc: "Find tax-loss opportunities before year end",
+    title: "Tax Harvesting Intelligence",
+    whatItDoes:
+      "Get personalised AI recommendations to legally reduce your capital gains tax. Strategies include LTCG exemption harvesting, holding period optimisation, and tax loss harvesting — all based on Indian tax law.",
+    steps: [
+      "Ensure your trades are synced (broker or CSV)",
+      "Visit Tax Harvesting to see your FY tax position",
+      "Review each recommended strategy",
+      "Implement strategies through your broker before March 31",
+    ],
+    cta: "View Tax Strategies →",
     href: "/harvesting",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -41,9 +76,17 @@ const QUICK_NAV = [
     ),
   },
   {
-    title: "Portfolio Backtesting",
-    desc: "Replay your trades and run Monte Carlo simulations",
-    href: "/replay",
+    title: "Strategy Backtester",
+    whatItDoes:
+      "Build and test options strategies against historical data. Configure instruments, entry/exit rules, leg builder with up to 10 legs, stop loss, targets, and trailing options — then see year-wise results.",
+    steps: [
+      "Go to Strategy Backtester",
+      "Select instrument (NIFTY, BANKNIFTY, etc.)",
+      "Build your strategy using the Leg Builder",
+      "Set the date range and click Run Backtest",
+    ],
+    cta: "Open Backtester →",
+    href: "/backtest",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M3 12a9 9 0 1 0 9-9" />
@@ -54,7 +97,15 @@ const QUICK_NAV = [
   },
   {
     title: "CA Export",
-    desc: "Download your ITR-3 bundle for your chartered accountant",
+    whatItDoes:
+      "Download your complete tax package for your Chartered Accountant. Includes ITR-3 schedules (JSON), realized gains CSV, holdings CSV, and a README — everything your CA needs for filing.",
+    steps: [
+      "Ensure your trades are synced",
+      "Go to CA Export",
+      "Download the ZIP bundle",
+      "Hand the ZIP to your CA for ITR-3 filing",
+    ],
+    cta: "Download CA Bundle →",
     href: "/export",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -63,8 +114,39 @@ const QUICK_NAV = [
         <path d="M12 15V3" />
       </svg>
     ),
+    wide: true,
   },
 ];
+
+function FeatureGuideCard({ card }: { card: FeatureCard }) {
+  return (
+    <Card className={`flex h-full flex-col p-5 ${card.wide ? "md:col-span-2" : ""}`}>
+      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-soft text-brand">
+        {card.icon}
+      </div>
+      <p className="mt-3 text-base font-semibold text-ink">{card.title}</p>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-ink-muted">{card.whatItDoes}</p>
+
+      <hr className="my-4 border-rule" />
+
+      <MetricLabel>How to get started</MetricLabel>
+      <ol className="mt-2 space-y-1.5 text-[13px] text-ink-muted">
+        {card.steps.map((step, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="shrink-0 font-mono text-ink-faint">{i + 1}.</span>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ol>
+
+      <div className="mt-4 flex-1" />
+
+      <Link href={card.href} className="mt-4 block">
+        <Button className="w-full justify-center">{card.cta}</Button>
+      </Link>
+    </Card>
+  );
+}
 
 export function WelcomeScreen({
   userId,
@@ -105,23 +187,10 @@ export function WelcomeScreen({
         </p>
       </div>
 
-      {/* Quick-nav cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      {/* Feature guide cards */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {QUICK_NAV.map((card) => (
-          <Link key={card.href} href={card.href} className="group block">
-            <Card
-              interactive
-              className="flex h-full flex-col gap-3 p-5 transition-shadow"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-soft text-brand">
-                {card.icon}
-              </div>
-              <div>
-                <p className="font-medium text-ink">{card.title}</p>
-                <p className="mt-1 text-sm text-ink-muted">{card.desc}</p>
-              </div>
-            </Card>
-          </Link>
+          <FeatureGuideCard key={card.href} card={card} />
         ))}
       </div>
     </div>

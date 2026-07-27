@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, MetricLabel } from "@/components/ui/card";
 import { Money } from "@/components/ui/money";
 import { BrokerChips } from "@/components/dashboard/broker-chips";
+import { BrokerActionsBar } from "@/components/shared/broker-actions-bar";
 import { PortfolioTable } from "@/app/(app)/portfolio/portfolio-table";
 import { sumToPaise, parseDecimalToPaise } from "@/lib/format";
 import { apiFetch } from "@/lib/api";
@@ -148,6 +150,7 @@ export function PortfolioClient({
   brokers: BrokerConnection[];
   totalEquityValue: string | null;
 }) {
+  const router = useRouter();
   const [brokerFilter, setBrokerFilter] = useState<string | null>(null);
   const [xirrData, setXirrData] = useState<XirrData | null>(null);
   const [xirrLoading, setXirrLoading] = useState(true);
@@ -194,6 +197,11 @@ export function PortfolioClient({
     <>
       {/* A — Broker filter tabs */}
       <BrokerChips brokers={brokers} selected={brokerFilter} onSelect={setBrokerFilter} />
+
+      {/* A2 — Connect/sync broker + upload tradebook */}
+      <div className="mt-4">
+        <BrokerActionsBar onUploadSuccess={() => router.refresh()} />
+      </div>
 
       {/* SECTION 1 — Returns */}
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
