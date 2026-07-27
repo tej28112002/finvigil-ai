@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -13,6 +14,8 @@ from app.schemas.portfolio import PortfolioItemResponse, XirrResponse
 from app.services.nifty_service import NiftyService
 from app.services.portfolio_service import PortfolioService
 from app.services.xirr_service import XirrService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -67,7 +70,7 @@ def get_portfolio_xirr(
     holding_repo: HoldingLotRepository = Depends(get_holding_lot_repository),
     trade_repo: TradeRepository = Depends(get_trade_repository),
 ):
-    print("[FINVIGIL] xirr endpoint called", flush=True)
+    logger.debug("[FINVIGIL] xirr endpoint called")
 
     # Fetched once here and passed into the Phase B (yfinance) metrics below
     # so each one doesn't re-query lots/trades from the DB independently.
@@ -80,37 +83,37 @@ def get_portfolio_xirr(
     try:
         xirr, alpha = service.compute_xirr_and_alpha(user_id)
     except Exception as e:
-        print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}")
         xirr, alpha = None, None
 
     try:
         absolute_return = service.compute_absolute_return(user_id)
     except Exception as e:
-        print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}")
         absolute_return = None
 
     try:
         cagr = service.compute_cagr(user_id)
     except Exception as e:
-        print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}")
         cagr = None
 
     try:
         asset_allocation = service.compute_asset_allocation(user_id)
     except Exception as e:
-        print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}")
         asset_allocation = None
 
     try:
         top_holdings = service.compute_concentration(user_id)
     except Exception as e:
-        print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}")
         top_holdings = None
 
     try:
         current_value = service.get_current_value(user_id)
     except Exception as e:
-        print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}")
         current_value = None
 
     xirr_percent = round(xirr * 100, 4) if xirr is not None else None
@@ -118,47 +121,46 @@ def get_portfolio_xirr(
     try:
         volatility = nifty_service.compute_volatility(user_id, lots, trades)
     except Exception as e:
-        print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}")
         volatility = None
 
     try:
         max_drawdown = nifty_service.compute_max_drawdown(user_id, lots, trades)
     except Exception as e:
-        print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}")
         max_drawdown = None
 
     try:
         beta = nifty_service.compute_beta(user_id, lots, trades)
     except Exception as e:
-        print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}")
         beta = None
 
     try:
         sharpe = nifty_service.compute_sharpe(user_id, lots, trades, xirr_percent)
     except Exception as e:
-        print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}")
         sharpe = None
 
     try:
         sortino = nifty_service.compute_sortino(user_id, lots, trades, xirr_percent)
     except Exception as e:
-        print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}")
         sortino = None
 
     try:
         var_95 = nifty_service.compute_var_95(user_id, lots, trades, current_value)
     except Exception as e:
-        print(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}", flush=True)
+        logger.warning(f"[FINVIGIL] portfolio/xirr metric failed: {type(e).__name__}: {e}")
         var_95 = None
 
-    print(
+    logger.debug(
         f"[FINVIGIL] xirr response: "
         f"xirr={xirr} alpha={alpha} beta={beta} "
         f"vol={volatility} mdd={max_drawdown} "
         f"sharpe={sharpe} sortino={sortino} "
         f"var={var_95} abs_ret={absolute_return} "
-        f"cagr={cagr} alloc={asset_allocation}",
-        flush=True,
+        f"cagr={cagr} alloc={asset_allocation}"
     )
 
     return XirrResponse(

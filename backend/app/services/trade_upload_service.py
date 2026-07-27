@@ -17,6 +17,7 @@ from io import BytesIO
 from uuid import UUID
 
 import pandas as pd
+from sqlalchemy.exc import IntegrityError
 
 from app.repositories.broker_connection_repository import BrokerConnectionRepository
 from app.repositories.trade_repository import TradeRepository
@@ -228,6 +229,13 @@ class TradeUploadService:
                 skipped += 1
                 continue
 
+            # Savepoint-scoped: the in-memory existing_hashes check above
+            # catches most duplicates, but a race between two concurrent
+            # uploads (or any other IntegrityError) would otherwise abort
+            # the shared request-level transaction, taking every row after
+            # it -- and this same upload's earlier successes, still
+            # uncommitted -- down with it.
+            savepoint = self.instrument_service.instrument_repository.db.begin_nested()
             try:
                 instrument = self.instrument_service.get_or_create_instrument(
                     symbol=row["symbol"],
@@ -245,9 +253,14 @@ class TradeUploadService:
                     execution_time=row["execution_time"],
                     idempotency_hash=hash_,
                 )
+                savepoint.commit()
                 existing_hashes.add(hash_)
                 processed += 1
+            except IntegrityError:
+                savepoint.rollback()
+                skipped += 1
             except Exception as e:
+                savepoint.rollback()
                 failed += 1
                 if len(errors) < 10:
                     errors.append(f"{row['symbol']}: {e}")

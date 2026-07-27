@@ -2,6 +2,8 @@ from decimal import Decimal
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
+
 from app.core.idempotency import generate_trade_idempotency_hash
 from app.services.csv_parser_service import CsvParserService
 from app.services.trade_service import TradeService
@@ -47,15 +49,7 @@ class CsvImportService:
                 else:
                     instrument_type = "equity"
 
-                # Step 2b — Get or create instrument
-                instrument = self.instrument_repository.get_or_create(
-                    symbol=row["symbol"],
-                    instrument_type=instrument_type,
-                    name=row["symbol"],  # symbol as name fallback
-                    isin=row["isin"],    # None for F&O
-                )
-
-                # Step 2c — Parse execution time
+                # Step 2b — Parse execution time
                 try:
                     execution_time = datetime.fromisoformat(
                         row["order_execution_time"]
@@ -65,52 +59,73 @@ class CsvImportService:
                         row["trade_date"], "%Y-%m-%d"
                     ).replace(hour=0, minute=0, second=0)
 
-                # Step 2d — Build idempotency hash (shared utility)
+                # Step 2c — Build idempotency hash (shared utility)
                 idempotency_hash = generate_trade_idempotency_hash(
                     broker_connection_id=broker_connection_id,
                     broker_trade_id=row["trade_id"],
                 )
 
-                # Step 2e — Route to correct trade processor
+                # Step 2d — Route to correct trade processor
                 trade_type = row["trade_type"]  # "buy" or "sell"
                 quantity = Decimal(str(row["quantity"]))
                 price = row["price"]  # already Decimal from parser
 
-                if instrument_type == "fno":
-                    if trade_type == "sell":
-                        self.trade_service.process_fno_sell_trade(
-                            user_id=user_id,
-                            instrument_id=instrument.id,
-                            broker_connection_id=broker_connection_id,
-                            broker_trade_id=row["trade_id"],
-                            quantity=quantity,
-                            price=price,
-                            execution_time=execution_time,
-                            idempotency_hash=idempotency_hash,
-                        )
-                    else:
-                        self.trade_service.process_fno_buy_trade(
-                            user_id=user_id,
-                            instrument_id=instrument.id,
-                            broker_connection_id=broker_connection_id,
-                            broker_trade_id=row["trade_id"],
-                            quantity=quantity,
-                            price=price,
-                            execution_time=execution_time,
-                            idempotency_hash=idempotency_hash,
-                        )
-                else:
-                    self.trade_service.process_trade(
-                        trade_type=trade_type,
-                        user_id=user_id,
-                        instrument_id=instrument.id,
-                        broker_connection_id=broker_connection_id,
-                        broker_trade_id=row["trade_id"],
-                        quantity=quantity,
-                        price=price,
-                        execution_time=execution_time,
-                        idempotency_hash=idempotency_hash,
+                # Savepoint-scoped: a duplicate idempotency_hash on resync
+                # raises IntegrityError on flush -- without a savepoint
+                # boundary here, that would abort the shared request-level
+                # transaction, taking every row after it (and this same
+                # import's earlier successes, still uncommitted) down with it.
+                savepoint = self.instrument_repository.db.begin_nested()
+                try:
+                    instrument = self.instrument_repository.get_or_create(
+                        symbol=row["symbol"],
+                        instrument_type=instrument_type,
+                        name=row["symbol"],  # symbol as name fallback
+                        isin=row["isin"],    # None for F&O
                     )
+                    if instrument_type == "fno":
+                        if trade_type == "sell":
+                            self.trade_service.process_fno_sell_trade(
+                                user_id=user_id,
+                                instrument_id=instrument.id,
+                                broker_connection_id=broker_connection_id,
+                                broker_trade_id=row["trade_id"],
+                                quantity=quantity,
+                                price=price,
+                                execution_time=execution_time,
+                                idempotency_hash=idempotency_hash,
+                            )
+                        else:
+                            self.trade_service.process_fno_buy_trade(
+                                user_id=user_id,
+                                instrument_id=instrument.id,
+                                broker_connection_id=broker_connection_id,
+                                broker_trade_id=row["trade_id"],
+                                quantity=quantity,
+                                price=price,
+                                execution_time=execution_time,
+                                idempotency_hash=idempotency_hash,
+                            )
+                    else:
+                        self.trade_service.process_trade(
+                            trade_type=trade_type,
+                            user_id=user_id,
+                            instrument_id=instrument.id,
+                            broker_connection_id=broker_connection_id,
+                            broker_trade_id=row["trade_id"],
+                            quantity=quantity,
+                            price=price,
+                            execution_time=execution_time,
+                            idempotency_hash=idempotency_hash,
+                        )
+                    savepoint.commit()
+                except IntegrityError:
+                    savepoint.rollback()
+                    skipped += 1
+                    continue
+                except Exception:
+                    savepoint.rollback()
+                    raise
 
                 imported += 1
 

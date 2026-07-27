@@ -10,6 +10,7 @@ says so explicitly via requires_live_price rather than guessing.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
@@ -17,6 +18,8 @@ from uuid import UUID
 from app.repositories.dashboard_repository import DashboardRepository
 from app.repositories.holding_lot_repository import HoldingLotRepository
 from app.repositories.realized_gain_repository import RealizedGainRepository
+
+logger = logging.getLogger(__name__)
 
 LTCG_EXEMPTION_LIMIT = Decimal("125000")  # Rs 1,25,000 per FY
 LTCG_RATE = Decimal("0.125")  # 12.5%
@@ -486,18 +489,16 @@ class TaxHarvestingIntelligenceService:
                     else:
                         strategies.append(result)
             except Exception as e:
-                print(
-                    f"[FINVIGIL] harvest strategy failed: {type(e).__name__}: {e}",
-                    flush=True,
+                logger.warning(
+                    f"[FINVIGIL] harvest strategy failed: {type(e).__name__}: {e}"
                 )
 
         try:
             hp_alerts = self.strategy_holding_period_optimizer(user_id)
             strategies.extend(hp_alerts)
         except Exception as e:
-            print(
-                f"[FINVIGIL] holding period strategy failed: {type(e).__name__}: {e}",
-                flush=True,
+            logger.warning(
+                f"[FINVIGIL] holding period strategy failed: {type(e).__name__}: {e}"
             )
 
         priority_order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}

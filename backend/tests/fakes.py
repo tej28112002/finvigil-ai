@@ -5,7 +5,6 @@ actually calls, matching the real repositories' method signatures exactly
 (cross-checked against app/repositories/*.py) so a fake passing a test says
 something real about the service's logic, not about the fake's own shape.
 """
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -13,16 +12,32 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 
-class FakeDbSession:
-    """Stands in for the SQLAlchemy Session repositories expose as `.db`.
-    Only `begin_nested()` (used as a savepoint context manager around
-    per-row writes in zerodha_service.py/upstox_service.py) is needed by
-    any fake-backed test today -- a no-op here since fakes have no real
-    transaction to roll back."""
+class FakeSavepoint:
+    """Mimics the SessionTransaction SQLAlchemy's Session.begin_nested()
+    returns -- usable either as a context manager (`with db.begin_nested():`,
+    zerodha_service.py/upstox_service.py's pattern) or with explicit
+    .commit()/.rollback() calls (groww_service.py/csv_import_service.py/
+    trade_upload_service.py's pattern). No-op either way -- fakes have no
+    real transaction to roll back."""
 
-    @contextmanager
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
+
+    def commit(self):
+        pass
+
+    def rollback(self):
+        pass
+
+
+class FakeDbSession:
+    """Stands in for the SQLAlchemy Session repositories expose as `.db`."""
+
     def begin_nested(self):
-        yield
+        return FakeSavepoint()
 
 
 @dataclass

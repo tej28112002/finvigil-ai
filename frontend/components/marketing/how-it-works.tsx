@@ -20,7 +20,7 @@ const STEPS: Step[] = [
     n: 1,
     title: "Connect your brokers",
     description:
-      "Link Zerodha, Angel One or Upstox with read-only access, or import a tradebook CSV. Two minutes, no passwords stored.",
+      "Link Zerodha, Upstox or Groww with read-only access, or import a tradebook CSV. Two minutes, no passwords stored.",
     icon: icon(
       <>
         <path d="M9 17H7A5 5 0 0 1 7 7h2" />

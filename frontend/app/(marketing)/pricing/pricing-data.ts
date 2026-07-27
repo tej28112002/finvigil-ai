@@ -114,7 +114,7 @@ export const PRICING_FAQS: FaqItem[] = [
   {
     question: "Which brokers do you support?",
     answer:
-      "Zerodha, Angel One, and Upstox via read-only OAuth, plus WazirX and CoinDCX for crypto. You can also import any broker's tradebook via CSV if a direct connection isn't available yet.",
+      "Zerodha, Upstox, and Groww via read-only OAuth (more brokers coming soon), plus WazirX and CoinDCX for crypto. You can also import any broker's tradebook via CSV if a direct connection isn't available yet.",
   },
   {
     question: "What is AIS reconciliation?",

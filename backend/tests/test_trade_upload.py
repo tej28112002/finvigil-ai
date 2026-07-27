@@ -10,6 +10,7 @@ detection actually round-trips through the full pipeline.
 from uuid import uuid4
 
 import pandas as pd
+from sqlalchemy.exc import IntegrityError
 
 from app.services.holding_service import HoldingLotService
 from app.services.instrument_service import InstrumentService
@@ -100,3 +101,45 @@ def test_duplicate_upload_is_skipped_on_second_submission():
     second = service.process_upload(csv_bytes, "tradebook.csv", user_id)
     assert second["trades_processed"] == 0
     assert second["trades_skipped"] == 1
+
+
+def test_upload_continues_after_integrity_error_on_one_row(monkeypatch):
+    """FIX 3: a real IntegrityError on one row (e.g. a race between two
+    concurrent uploads) must not poison the rest of the batch -- the
+    savepoint around each row's write should isolate it."""
+    service = _upload_service()
+    user_id = uuid4()
+
+    df = pd.DataFrame({
+        "symbol": ["RELIANCE", "TCS", "SBIN"],
+        "trade_type": ["BUY", "BUY", "BUY"],
+        "quantity": [10, 5, 8],
+        "price": [2500.0, 3800.0, 600.0],
+        "date": ["2025-01-10", "2025-01-11", "2025-01-12"],
+    })
+    csv_bytes = df.to_csv(index=False).encode()
+
+    call_count = {"n": 0}
+    original_process_trade = TradeService.process_trade
+
+    def flaky_process_trade(self, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 2:
+            raise IntegrityError(
+                "INSERT INTO trades ...", {},
+                Exception(
+                    "duplicate key value violates unique constraint "
+                    "\"trades_idempotency_hash_key\""
+                ),
+            )
+        return original_process_trade(self, **kwargs)
+
+    monkeypatch.setattr(TradeService, "process_trade", flaky_process_trade)
+
+    # Must not raise -- the whole point of the savepoint fix.
+    result = service.process_upload(csv_bytes, "tradebook.csv", user_id)
+
+    assert call_count["n"] == 3
+    assert result["trades_processed"] == 2
+    assert result["trades_skipped"] == 1
+    assert result["trades_failed"] == 0

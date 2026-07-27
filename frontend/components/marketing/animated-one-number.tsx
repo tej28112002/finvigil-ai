@@ -19,10 +19,10 @@ import { useEffect, useState } from "react";
 
 const BROKERS = [
   { name: "Zerodha", value: 820400, dot: "var(--color-broker-zerodha)" },
-  { name: "Angel One", value: 410600, dot: "var(--color-broker-angelone)" },
+  { name: "Groww", value: 285000, dot: "var(--color-broker-groww, #00d09c)" },
   { name: "Upstox", value: 221300, dot: "var(--color-broker-upstox)" },
 ];
-const TOTAL = 1452300;
+const TOTAL = BROKERS.reduce((sum, b) => sum + b.value, 0);
 const EST_TAX = 8940;
 const COUNT_MS = 1400;
 

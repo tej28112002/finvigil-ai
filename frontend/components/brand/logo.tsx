@@ -13,7 +13,7 @@
  * The active mark is chosen in <Logo/> below; swapping is a one-line change.
  */
 
-export function VigilantEyeMark({ size = 28 }: { size?: number }) {
+function VigilantEyeMark({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true">
       <path d="M7 31 Q24 9 41 31" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
@@ -23,7 +23,7 @@ export function VigilantEyeMark({ size = 28 }: { size?: number }) {
   );
 }
 
-export function LedgerVMark({ size = 28 }: { size?: number }) {
+function LedgerVMark({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="currentColor" aria-hidden="true">
       <rect x="4" y="6" width="10" height="5" rx="2.5" />
@@ -49,10 +49,10 @@ export function ConvergenceMark({ size = 28 }: { size?: number }) {
 }
 
 /**
- * Mark + wordmark lockup. PROVISIONAL default: Convergence — strongest
+ * Mark + wordmark lockup. Current brand mark: Convergence — strongest
  * narrative fit ("all your brokers, one picture" drawn literally as three
- * streams merging to one point). Pending the user's final pick across all
- * three candidates; swapping is this one line.
+ * streams merging to one point). Swapping to a different candidate mark
+ * is this one line.
  *
  * `onBrand`: set true when the logo sits on a --brand-colored surface (e.g.
  * the login brand panel). There, the accent must switch from --brand to
