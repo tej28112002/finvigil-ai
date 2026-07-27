@@ -11,13 +11,18 @@ No real Zerodha/Upstox API calls -- kite.holdings() and requests.get are
 monkeypatched.
 """
 from decimal import Decimal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-import pytest
 import requests
 from kiteconnect import KiteConnect
 from kiteconnect.exceptions import TokenException
 
+from app.models.holding_lot import HoldingLot
+from app.repositories.broker_connection_repository import BrokerConnectionRepository
+from app.repositories.holding_lot_repository import HoldingLotRepository
+from app.repositories.instrument_repository import InstrumentRepository
+from app.repositories.realized_gain_repository import RealizedGainRepository
+from app.repositories.trade_repository import TradeRepository
 from app.services.holding_service import HoldingLotService
 from app.services.trade_service import TradeService
 from app.services.upstox_service import UpstoxService
@@ -188,3 +193,79 @@ def test_upstox_sync_holdings_returns_timeout_error_code(monkeypatch):
 
     assert result["success"] is False
     assert result["error_code"] == "TIMEOUT"
+
+
+# --- Regression test against the REAL DB: a duplicate idempotency_hash
+# collision inside the per-holding loop must not poison the shared
+# request-level session. In-memory fakes can't reproduce this -- Postgres
+# aborts the whole transaction on an IntegrityError until an explicit
+# ROLLBACK, which is exactly what the begin_nested() savepoint now scopes
+# to just the failing holding. Before that fix, the second call below would
+# raise an unhandled sqlalchemy.exc.PendingRollbackError instead of
+# returning a clean result. ---
+
+def test_zerodha_sync_holdings_duplicate_collision_does_not_poison_session(
+    db_test_user, db_session, monkeypatch
+):
+    # Fixture order matters here: pytest tears down in reverse of setup
+    # order, so listing db_test_user first means db_session's rollback()
+    # runs BEFORE db_test_user's teardown DELETEs the same rows through a
+    # separate connection -- otherwise that DELETE blocks on locks held by
+    # this test's still-open, uncommitted db_session transaction until it
+    # hits Postgres's statement_timeout.
+    user_id = UUID(db_test_user["user_id"])
+    broker_connection_id = UUID(db_test_user["broker_connection_id"])
+
+    broker_repo = BrokerConnectionRepository(db_session)
+    conn = broker_repo.create_connection(user_id=user_id, broker_name="zerodha", api_key="test-key")
+    broker_repo.update_access_token_kms_id(conn, "fake-kms-id")
+
+    trade_repo = TradeRepository(db_session)
+    holding_repo = HoldingLotRepository(db_session)
+    trade_service = TradeService(
+        trade_repository=trade_repo,
+        holding_service=HoldingLotService(holding_repository=holding_repo),
+        realized_gain_repository=RealizedGainRepository(db_session),
+    )
+    service = ZerodhaService(
+        broker_connection_repository=broker_repo,
+        vault_repository=None,
+        trade_service=trade_service,
+        instrument_repository=InstrumentRepository(db_session),
+        holding_lot_repository=holding_repo,
+    )
+    # Bypass Vault entirely -- this test is about the DB transaction
+    # boundary, not credential storage.
+    monkeypatch.setattr(ZerodhaService, "get_access_token", lambda self, user_id: "fake-token")
+
+    symbol = f"TESTSYM{user_id.hex[:8]}"
+
+    def fake_holdings(self):
+        return [{"tradingsymbol": symbol, "isin": None, "quantity": 10, "average_price": 100.0}]
+
+    monkeypatch.setattr(KiteConnect, "holdings", fake_holdings)
+
+    first = service.sync_holdings(user_id=user_id, broker_connection_id=broker_connection_id)
+    assert first["success"] is True
+    assert first["holdings_synced"] == 1
+
+    # Force the collision: delete the lot the first call created (but not
+    # the underlying trade), so get_open_lots() no longer finds it and
+    # sync_holdings retries the create-trade branch -- which collides on
+    # the same stable per-symbol idempotency hash as the first call.
+    db_session.query(HoldingLot).filter(HoldingLot.user_id == user_id).delete()
+    db_session.flush()
+
+    second = service.sync_holdings(user_id=user_id, broker_connection_id=broker_connection_id)
+
+    # Before the savepoint fix, sync_holdings itself would raise here
+    # (session poisoned by the first collision) instead of returning a
+    # structured result.
+    assert second["success"] is True
+    assert second["holdings_synced"] == 0
+    assert len(second["errors"]) == 1
+
+    # The session must still be usable afterward -- a poisoned session
+    # would raise on this query too.
+    remaining = db_session.query(HoldingLot).filter(HoldingLot.user_id == user_id).count()
+    assert remaining == 0
