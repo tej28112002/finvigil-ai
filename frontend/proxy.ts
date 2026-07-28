@@ -43,17 +43,25 @@ export async function proxy(request: NextRequest) {
   // The OAuth provider redirects here before a session cookie exists — the
   // route handler is what creates the session (or reports the failure), so
   // it must run unauthenticated rather than get bounced to /login first.
-  const isAuthCallbackRoute = pathname.startsWith("/auth/callback");
-  const isPublicRoute = isMarketingRoute || isLoginRoute || isAuthCallbackRoute;
+  // /auth/confirm is the equivalent landing spot for a Supabase email
+  // confirmation link, should one ever point there instead of reusing
+  // /auth/callback the way the current signup flow does.
+  const isAuthRoute =
+    pathname.startsWith("/auth/callback") || pathname.startsWith("/auth/confirm");
+  const isPublicRoute = isMarketingRoute || isLoginRoute || isAuthRoute;
 
   if (!session && !isPublicRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Only bounce a LOGGED-IN user off "/" and "/login" to /dashboard — a
-  // logged-in user should still be able to view Pricing or About (e.g.
-  // to consider upgrading) without being forced back to the app shell.
-  if (session && (pathname === "/" || isLoginRoute)) {
+  // Only bounce a LOGGED-IN user off "/login" to /dashboard — they don't
+  // need to log in again. The marketing homepage ("/") is never redirected
+  // for anyone, logged in or not: a returning user should still be able to
+  // land on it (e.g. from a bookmark or shared link) and see the "Sign in"
+  // CTA, not get yanked straight into the app shell. Pricing/About are
+  // likewise never gated, so a logged-in user can still view them (e.g. to
+  // consider upgrading) without being forced back into the app.
+  if (session && isLoginRoute) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
