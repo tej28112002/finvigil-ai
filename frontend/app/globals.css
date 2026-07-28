@@ -112,6 +112,12 @@
   --font-mono: var(--font-plex-mono);
 }
 
+/* Smooth in-page scrolling for anchor links (e.g. the marketing nav's
+   "Features" link landing on #features). */
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
@@ -190,6 +196,9 @@ body, .theme-transition {
 
 /* Quality floor: respect reduced motion. */
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   *,
   *::before,
   *::after {
