@@ -9,6 +9,11 @@ import { Money } from "@/components/ui/money";
 import { apiFetch } from "@/lib/api";
 import { parseDecimalToPaise, sumToPaise } from "@/lib/format";
 
+// "gain" is a special case handled outside IconTile (see FeatureGuideCard)
+// — reuses the P&L-reserved --gain token for this one card per an explicit
+// request, rather than extending IconTile's own color set.
+type FeatureCardColor = "orange" | "blue" | "purple" | "gain";
+
 interface FeatureCard {
   title: string;
   whatItDoes: string;
@@ -16,12 +21,14 @@ interface FeatureCard {
   cta: string;
   href: string;
   icon: React.ReactNode;
+  color: FeatureCardColor;
   wide?: boolean;
 }
 
 const QUICK_NAV: FeatureCard[] = [
   {
     title: "AI Journaling",
+    color: "orange",
     whatItDoes:
       "Track your trading performance with automatic analytics. Get win rate, profit factor, Sharpe ratio, and equity curve — all computed from your real trade history. Voice and text note-taking included.",
     steps: [
@@ -42,6 +49,7 @@ const QUICK_NAV: FeatureCard[] = [
   },
   {
     title: "Cross Broker Portfolio",
+    color: "blue",
     whatItDoes:
       "See your complete portfolio across all brokers in one place. Invested amount, current value, P&L, XIRR, Alpha vs Nifty 50, Beta, and risk metrics — all in one view.",
     steps: [
@@ -62,6 +70,7 @@ const QUICK_NAV: FeatureCard[] = [
   },
   {
     title: "Tax Harvesting Intelligence",
+    color: "gain",
     whatItDoes:
       "Get personalised AI recommendations to legally reduce your capital gains tax. Strategies include LTCG exemption harvesting, holding period optimisation, and tax loss harvesting — all based on Indian tax law.",
     steps: [
@@ -81,6 +90,7 @@ const QUICK_NAV: FeatureCard[] = [
   },
   {
     title: "Strategy Backtester",
+    color: "purple",
     whatItDoes:
       "Build and test options strategies against historical data. Configure instruments, entry/exit rules, leg builder with up to 10 legs, stop loss, targets, and trailing options — then see year-wise results.",
     steps: [
@@ -101,6 +111,7 @@ const QUICK_NAV: FeatureCard[] = [
   },
   {
     title: "CA Export",
+    color: "orange",
     whatItDoes:
       "Download your complete tax package for your Chartered Accountant. Includes ITR-3 schedules (JSON), realized gains CSV, holdings CSV, and a README — everything your CA needs for filing.",
     steps: [
@@ -125,9 +136,18 @@ const QUICK_NAV: FeatureCard[] = [
 function FeatureGuideCard({ card }: { card: FeatureCard }) {
   return (
     <Card className={`flex h-full flex-col p-5 ${card.wide ? "md:col-span-2" : ""}`}>
-      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-soft text-brand">
-        {card.icon}
-      </div>
+      {card.color === "gain" ? (
+        // Reuses the P&L-reserved --gain token for this one card (Tax
+        // Harvesting) rather than extending IconTile's own color set,
+        // which stays untouched.
+        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-gain-soft text-gain">
+          {card.icon}
+        </div>
+      ) : (
+        <IconTile color={card.color} size={9}>
+          {card.icon}
+        </IconTile>
+      )}
       <p className="mt-3 text-base font-semibold text-ink">{card.title}</p>
       <p className="mt-1.5 text-[13px] leading-relaxed text-ink-muted">{card.whatItDoes}</p>
 
@@ -152,60 +172,9 @@ function FeatureGuideCard({ card }: { card: FeatureCard }) {
   );
 }
 
-export function WelcomeScreen({
-  userId,
-  firstName,
-}: {
-  userId: string;
-  firstName: string;
-}) {
-  // localStorage is unavailable during SSR. Default null so we don't render
-  // the greeting on the server (no hydration mismatch), then pick up the
-  // real first-vs-return state after mount.
-  const [isFirstVisit, setIsFirstVisit] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (!userId) return;
-    const key = `finvigil_seen_${userId}`;
-    const seen = !!localStorage.getItem(key);
-    setIsFirstVisit(!seen);
-    if (!seen) {
-      localStorage.setItem(key, "1");
-    }
-  }, [userId]);
-
-  const greeting =
-    isFirstVisit === null
-      ? `Hello, ${firstName}!`
-      : isFirstVisit
-        ? `Welcome, ${firstName}!`
-        : `Welcome back, ${firstName}!`;
-
-  return (
-    <div className="mx-auto max-w-5xl space-y-10">
-      {/* Greeting */}
-      <div>
-        <h1 className="font-display text-4xl font-bold text-ink">{greeting}</h1>
-        <p className="mt-2 text-base text-ink-muted">
-          Your portfolio intelligence platform for smarter tax and investment decisions.
-        </p>
-      </div>
-
-      {/* Feature guide cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {QUICK_NAV.map((card) => (
-          <FeatureGuideCard key={card.href} card={card} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── Connected-state overview ────────────────────────────────────────────
-// Shown instead of WelcomeScreen once the user actually has synced
-// portfolio data — previously /dashboard showed the same first-time
-// feature-guide cards forever, even to a long-time user with a real
-// portfolio. XIRR/beta/volatility are fetched client-side (same split
+// Shown above the feature guide cards once the user actually has synced
+// portfolio data. XIRR/beta/volatility are fetched client-side (same split
 // portfolio-client.tsx already uses) so the DB-backed hero cards render
 // immediately and only the yfinance-backed risk metrics show a skeleton.
 
@@ -251,12 +220,10 @@ function StatSkeleton() {
 }
 
 function ConnectedOverview({
-  firstName,
   portfolio,
   brokers,
   totalEquityValue,
 }: {
-  firstName: string;
   portfolio: DashboardPortfolioItem[];
   brokers: DashboardBrokerConnection[];
   totalEquityValue: string | null;
@@ -277,12 +244,7 @@ function ConnectedOverview({
   const activeBrokers = brokers.filter((b) => b.status === "active");
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="font-display text-3xl font-bold text-ink">Welcome back, {firstName}!</h1>
-        <p className="mt-1 text-sm text-ink-muted">Here&apos;s where things stand today.</p>
-      </div>
-
+    <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Hero — Portfolio Value, the signature element: a soft glow in the
             current theme's brand color, echoing the marketing homepage's
@@ -441,25 +403,6 @@ function ConnectedOverview({
           </div>
         </Card>
       )}
-
-      {/* Compact links to the rest of the app — the full onboarding guide
-          cards (steps, "how to get started") stay reserved for WelcomeScreen,
-          a returning user with real data doesn't need them re-explained. */}
-      <div>
-        <h2 className="font-display text-lg text-ink">Explore</h2>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {QUICK_NAV.filter((c) => !c.wide).map((card) => (
-            <Link key={card.href} href={card.href}>
-              <Card interactive className="flex h-full flex-col items-start gap-2 p-4">
-                <IconTile color="neutral" size={8}>
-                  {card.icon}
-                </IconTile>
-                <span className="text-sm font-medium text-ink">{card.title}</span>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -479,15 +422,60 @@ export function DashboardHome({
   brokers: DashboardBrokerConnection[];
   totalEquityValue: string | null;
 }) {
-  if (hasData) {
-    return (
-      <ConnectedOverview
-        firstName={firstName}
-        portfolio={portfolio}
-        brokers={brokers}
-        totalEquityValue={totalEquityValue}
-      />
-    );
-  }
-  return <WelcomeScreen userId={userId} firstName={firstName} />;
+  // localStorage is unavailable during SSR. Default null so we don't render
+  // the greeting on the server (no hydration mismatch), then pick up the
+  // real first-vs-return state after mount.
+  const [isFirstVisit, setIsFirstVisit] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    const key = `finvigil_seen_${userId}`;
+    const seen = !!localStorage.getItem(key);
+    setIsFirstVisit(!seen);
+    if (!seen) {
+      localStorage.setItem(key, "1");
+    }
+  }, [userId]);
+
+  const greeting =
+    isFirstVisit === null
+      ? `Hello, ${firstName}!`
+      : isFirstVisit
+        ? `Welcome, ${firstName}!`
+        : `Welcome back, ${firstName}!`;
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-10">
+      {/* 1 — Greeting, always shown */}
+      <div>
+        <h1 className="font-display text-4xl font-bold text-ink">{greeting}</h1>
+        <p className="mt-2 text-base text-ink-muted">
+          Your portfolio intelligence platform for smarter tax and investment decisions.
+        </p>
+      </div>
+
+      {/* 2 — Connected-state stats overview, only once the user has data */}
+      {hasData && (
+        <ConnectedOverview
+          portfolio={portfolio}
+          brokers={brokers}
+          totalEquityValue={totalEquityValue}
+        />
+      )}
+
+      {/* 3 — Feature guide cards, always shown: both new and existing
+          users benefit from knowing what each feature does and how to
+          use it, not just users who haven't connected anything yet. */}
+      <div>
+        {hasData && (
+          <h2 className="font-display mb-4 text-lg text-ink">Explore FinVigil</h2>
+        )}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {QUICK_NAV.map((card) => (
+            <FeatureGuideCard key={card.href} card={card} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
