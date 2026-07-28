@@ -27,9 +27,9 @@ export function MarketingNav() {
         <div className="flex items-center gap-2 sm:gap-3">
           <ThemeToggle />
           <Link href="/login" className="hidden sm:block">
-            <Button variant="ghost">Log in</Button>
+            <Button variant="ghost">Sign in</Button>
           </Link>
-          <Link href="/login">
+          <Link href="/login?mode=signup">
             <Button variant="primary" className="px-3 sm:px-4">
               Get started
             </Button>
