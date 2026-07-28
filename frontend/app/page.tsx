@@ -9,9 +9,10 @@ import { FinalCta } from "@/components/marketing/final-cta";
 import { MarketingFooter } from "@/components/marketing/footer";
 
 /**
- * Public marketing homepage (Phase 13 Stage 2C, BRD §6). Logged-out
- * visitors land here; an authenticated visit to "/" is redirected to
- * /dashboard by proxy.ts before this ever renders.
+ * Public marketing homepage (Phase 13 Stage 2C, BRD §6). Always public --
+ * proxy.ts never redirects "/" regardless of session state, so a returning
+ * logged-in visitor can land here too (e.g. via a bookmark or shared link)
+ * rather than always being forced straight into the app shell.
  */
 export default function Home() {
   return (
