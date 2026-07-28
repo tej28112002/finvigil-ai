@@ -1,5 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
-import { WelcomeScreen } from "@/app/(app)/dashboard/dashboard-client";
+import { apiFetchServer, getServerToken } from "@/lib/api-server";
+import { DashboardHome } from "@/app/(app)/dashboard/dashboard-client";
+
+interface PortfolioItem {
+  instrument_id: string;
+  total_invested: string;
+}
+interface BrokerConnection {
+  id: string;
+  broker_name: string;
+  status: string;
+}
+interface DashboardData {
+  total_equity_value: string;
+  total_crypto_value: string;
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -20,5 +35,23 @@ export default async function DashboardPage() {
     firstName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
   }
 
-  return <WelcomeScreen userId={user?.id ?? ""} firstName={firstName} />;
+  const token = await getServerToken();
+  const [portfolio, brokers, dashboard] = await Promise.all([
+    apiFetchServer<PortfolioItem[]>("/portfolio/", token),
+    apiFetchServer<BrokerConnection[]>("/brokers/", token),
+    apiFetchServer<DashboardData>("/dashboard/", token),
+  ]);
+
+  const hasData = (portfolio?.length ?? 0) > 0;
+
+  return (
+    <DashboardHome
+      userId={user?.id ?? ""}
+      firstName={firstName}
+      hasData={hasData}
+      portfolio={portfolio ?? []}
+      brokers={brokers ?? []}
+      totalEquityValue={dashboard?.total_equity_value ?? null}
+    />
+  );
 }

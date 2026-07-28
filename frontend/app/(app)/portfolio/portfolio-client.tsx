@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, MetricLabel } from "@/components/ui/card";
+import { IconTile } from "@/components/ui/icon-tile";
 import { Money } from "@/components/ui/money";
 import { BrokerChips } from "@/components/dashboard/broker-chips";
 import { BrokerActionsBar } from "@/components/shared/broker-actions-bar";
@@ -75,21 +76,65 @@ function InfoTip({ text }: { text: string }) {
   );
 }
 
+// Small shared glyph set for the metric-card IconTiles below — decoration
+// only, reused across cards rather than one bespoke icon per stat.
+function TrendIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 17l6-6 4 4 8-8" />
+      <path d="M15 7h6v6" />
+    </svg>
+  );
+}
+function WalletIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="6" width="18" height="13" rx="2" />
+      <path d="M3 10h18" />
+      <circle cx="16" cy="14.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+function ShieldIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+    </svg>
+  );
+}
+function PieIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+      <path d="M22 12A10 10 0 0 0 12 2v10z" />
+    </svg>
+  );
+}
+
+type AccentColor = "brand" | "purple" | "blue" | "orange" | "neutral";
+
 /** A return-style metric: colored by sign (positive=gain, negative=loss). */
 function ReturnCard({
   label,
   value,
   loading,
   subtitle,
+  color = "orange",
+  icon = <TrendIcon />,
 }: {
   label: React.ReactNode;
   value: number | null;
   loading: boolean;
   subtitle: string;
+  color?: AccentColor;
+  icon?: React.ReactNode;
 }) {
   return (
     <Card className="p-5">
-      <MetricLabel>{label}</MetricLabel>
+      <div className="flex items-center gap-2.5">
+        <IconTile color={color} size={8}>{icon}</IconTile>
+        <MetricLabel>{label}</MetricLabel>
+      </div>
       <div className="mt-3">
         {loading ? <MetricSkeleton /> : (
           <span className={`font-mono text-2xl font-medium ${pctColor(value)}`}>
@@ -111,6 +156,8 @@ function RatioCard({
   tooltip,
   subtitle,
   format,
+  color = "purple",
+  icon = <ShieldIcon />,
 }: {
   label: string;
   value: number | null;
@@ -118,13 +165,18 @@ function RatioCard({
   tooltip: string;
   subtitle: string;
   format: (v: number) => string;
+  color?: AccentColor;
+  icon?: React.ReactNode;
 }) {
   return (
     <Card className="p-5">
-      <MetricLabel>
-        {label}
-        <InfoTip text={tooltip} />
-      </MetricLabel>
+      <div className="flex items-center gap-2.5">
+        <IconTile color={color} size={8}>{icon}</IconTile>
+        <MetricLabel>
+          {label}
+          <InfoTip text={tooltip} />
+        </MetricLabel>
+      </div>
       <div className="mt-3">
         {loading ? (
           <MetricSkeleton />
@@ -207,7 +259,10 @@ export function PortfolioClient({
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {/* Invested Amount */}
         <Card className="p-5">
-          <MetricLabel>Invested Amount</MetricLabel>
+          <div className="flex items-center gap-2.5">
+            <IconTile color="orange" size={8}><WalletIcon /></IconTile>
+            <MetricLabel>Invested Amount</MetricLabel>
+          </div>
           <div className="mt-3">
             <Money value={investedPaise} size="lg" />
           </div>
@@ -215,7 +270,10 @@ export function PortfolioClient({
 
         {/* Current Value */}
         <Card className="p-5">
-          <MetricLabel>Current Value</MetricLabel>
+          <div className="flex items-center gap-2.5">
+            <IconTile color="brand" size={8}><WalletIcon /></IconTile>
+            <MetricLabel>Current Value</MetricLabel>
+          </div>
           <div className="mt-3">
             {currentPaise !== null ? (
               <Money value={currentPaise} size="lg" />
@@ -230,7 +288,10 @@ export function PortfolioClient({
 
         {/* Profit / Loss */}
         <Card className="p-5">
-          <MetricLabel>Profit / Loss</MetricLabel>
+          <div className="flex items-center gap-2.5">
+            <IconTile color="orange" size={8}><TrendIcon /></IconTile>
+            <MetricLabel>Profit / Loss</MetricLabel>
+          </div>
           <div className="mt-3">
             {pnlPaise !== null ? (
               <Money value={pnlPaise} size="lg" tone={pnlTone} signed />
@@ -266,6 +327,7 @@ export function PortfolioClient({
           value={xirrPct}
           loading={xirrLoading}
           subtitle={xirrPct !== null ? "Annualised return (XIRR)" : "Not enough trade history"}
+          color="purple"
         />
 
         {/* Alpha */}
@@ -279,6 +341,7 @@ export function PortfolioClient({
           value={alphaPct}
           loading={xirrLoading}
           subtitle={alphaPct !== null ? `vs ${xirrData?.benchmark ?? "Nifty 50"}` : "Benchmark data unavailable"}
+          color="purple"
         />
 
         {/* Beta */}
@@ -333,10 +396,13 @@ export function PortfolioClient({
 
         {/* VaR 95% */}
         <Card className="p-5">
-          <MetricLabel>
-            VaR (95%)
-            <InfoTip text="On 95% of trading days, your single-day loss will not exceed this amount." />
-          </MetricLabel>
+          <div className="flex items-center gap-2.5">
+            <IconTile color="purple" size={8}><ShieldIcon /></IconTile>
+            <MetricLabel>
+              VaR (95%)
+              <InfoTip text="On 95% of trading days, your single-day loss will not exceed this amount." />
+            </MetricLabel>
+          </div>
           <div className="mt-3">
             {xirrLoading ? (
               <MetricSkeleton />
@@ -357,7 +423,10 @@ export function PortfolioClient({
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Asset Allocation */}
         <Card className="p-5">
-          <MetricLabel>Asset Allocation</MetricLabel>
+          <div className="flex items-center gap-2.5">
+            <IconTile color="blue" size={8}><PieIcon /></IconTile>
+            <MetricLabel>Asset Allocation</MetricLabel>
+          </div>
           <div className="mt-4 space-y-3">
             {xirrLoading ? (
               [0, 1, 2].map((i) => (
@@ -386,7 +455,10 @@ export function PortfolioClient({
 
         {/* Top Holdings */}
         <Card className="p-5">
-          <MetricLabel>Top Holdings</MetricLabel>
+          <div className="flex items-center gap-2.5">
+            <IconTile color="blue" size={8}><TrendIcon /></IconTile>
+            <MetricLabel>Top Holdings</MetricLabel>
+          </div>
           <div className="mt-4 space-y-3">
             {xirrLoading ? (
               [0, 1, 2].map((i) => (

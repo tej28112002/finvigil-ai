@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, MetricLabel } from "@/components/ui/card";
+import { IconTile } from "@/components/ui/icon-tile";
+import { Money } from "@/components/ui/money";
+import { apiFetch } from "@/lib/api";
+import { parseDecimalToPaise, sumToPaise } from "@/lib/format";
 
 interface FeatureCard {
   title: string;
@@ -195,4 +199,295 @@ export function WelcomeScreen({
       </div>
     </div>
   );
+}
+
+// ── Connected-state overview ────────────────────────────────────────────
+// Shown instead of WelcomeScreen once the user actually has synced
+// portfolio data — previously /dashboard showed the same first-time
+// feature-guide cards forever, even to a long-time user with a real
+// portfolio. XIRR/beta/volatility are fetched client-side (same split
+// portfolio-client.tsx already uses) so the DB-backed hero cards render
+// immediately and only the yfinance-backed risk metrics show a skeleton.
+
+interface DashboardPortfolioItem {
+  instrument_id: string;
+  total_invested: string;
+}
+interface DashboardBrokerConnection {
+  id: string;
+  broker_name: string;
+  status: string;
+}
+interface XirrSnapshot {
+  xirr_percent: number | null;
+  beta: number | null;
+  volatility_percent: number | null;
+}
+
+const BROKER_LABELS: Record<string, string> = {
+  zerodha: "Zerodha",
+  upstox: "Upstox",
+  groww: "Groww",
+  wazirx: "WazirX",
+  coindcx: "CoinDCX",
+  csv: "CSV Import",
+};
+
+function numStr(v: number | null | undefined, digits = 2, suffix = ""): string {
+  if (v === null || v === undefined) return "—";
+  const prefix = suffix === "%" && v > 0 ? "+" : "";
+  return `${prefix}${v.toFixed(digits)}${suffix}`;
+}
+
+function pctColor(v: number | null | undefined): string {
+  if (v === null || v === undefined) return "text-ink-faint";
+  if (v > 0) return "text-gain";
+  if (v < 0) return "text-loss";
+  return "text-ink";
+}
+
+function StatSkeleton() {
+  return <div className="h-8 w-20 animate-pulse rounded bg-rule" />;
+}
+
+function ConnectedOverview({
+  firstName,
+  portfolio,
+  brokers,
+  totalEquityValue,
+}: {
+  firstName: string;
+  portfolio: DashboardPortfolioItem[];
+  brokers: DashboardBrokerConnection[];
+  totalEquityValue: string | null;
+}) {
+  const [xirr, setXirr] = useState<XirrSnapshot | null>(null);
+  const [xirrLoading, setXirrLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch<XirrSnapshot>("/portfolio/xirr")
+      .then(setXirr)
+      .catch(() => setXirr(null))
+      .finally(() => setXirrLoading(false));
+  }, []);
+
+  const investedPaise = sumToPaise(portfolio.map((p) => p.total_invested));
+  const currentPaise = totalEquityValue ? parseDecimalToPaise(totalEquityValue) : null;
+  const pnlPaise = currentPaise !== null ? currentPaise - investedPaise : null;
+  const activeBrokers = brokers.filter((b) => b.status === "active");
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div>
+        <h1 className="font-display text-3xl font-bold text-ink">Welcome back, {firstName}!</h1>
+        <p className="mt-1 text-sm text-ink-muted">Here&apos;s where things stand today.</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* Hero — Portfolio Value, the signature element: a soft glow in the
+            current theme's brand color, echoing the marketing homepage's
+            "one number" motif now that it's showing the user's real number. */}
+        <Card className="relative overflow-hidden p-6 lg:col-span-2">
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.08]"
+            style={{
+              background: "radial-gradient(circle at 12% 10%, var(--brand), transparent 60%)",
+            }}
+            aria-hidden="true"
+          />
+          <div className="relative flex items-start gap-4">
+            <IconTile color="brand" size={10}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2 2 7l10 5 10-5-10-5Z" />
+                <path d="m2 17 10 5 10-5" />
+                <path d="m2 12 10 5 10-5" />
+              </svg>
+            </IconTile>
+            <div>
+              <MetricLabel>Portfolio Value</MetricLabel>
+              <div className="mt-2">
+                {currentPaise !== null ? (
+                  <Money value={currentPaise} size="xl" />
+                ) : (
+                  <span className="font-mono text-4xl font-medium text-ink-faint">—</span>
+                )}
+              </div>
+              <p className="mt-1.5 text-xs text-ink-faint">Across all connected brokers</p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Risk snapshot */}
+        <Card className="p-6">
+          <div className="flex items-center gap-3">
+            <IconTile color="purple">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+              </svg>
+            </IconTile>
+            <MetricLabel>Risk Snapshot</MetricLabel>
+          </div>
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-ink-muted">Beta vs Nifty 50</span>
+              {xirrLoading ? (
+                <div className="h-4 w-10 animate-pulse rounded bg-rule" />
+              ) : (
+                <span className="font-mono text-sm font-medium text-ink">{numStr(xirr?.beta)}</span>
+              )}
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-ink-muted">Volatility</span>
+              {xirrLoading ? (
+                <div className="h-4 w-10 animate-pulse rounded bg-rule" />
+              ) : (
+                <span className="font-mono text-sm font-medium text-ink">
+                  {numStr(xirr?.volatility_percent, 1, "%")}
+                </span>
+              )}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Stat tiles — each a different accent color, the "purple/gray/blue"
+          card variety on top of the site's brand color. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="p-5">
+          <div className="flex items-center gap-2.5">
+            <IconTile color="orange" size={8}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3v12" />
+                <path d="m7 10 5 5 5-5" />
+                <path d="M5 19h14" />
+              </svg>
+            </IconTile>
+            <MetricLabel>Invested</MetricLabel>
+          </div>
+          <div className="mt-3">
+            <Money value={investedPaise} size="lg" />
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center gap-2.5">
+            <IconTile color="blue" size={8}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 17l6-6 4 4 8-8" />
+                <path d="M15 7h6v6" />
+              </svg>
+            </IconTile>
+            <MetricLabel>Profit / Loss</MetricLabel>
+          </div>
+          <div className="mt-3">
+            {pnlPaise !== null ? (
+              <Money value={pnlPaise} size="lg" tone="auto" signed />
+            ) : (
+              <span className="font-mono text-2xl font-medium text-ink-faint">—</span>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center gap-2.5">
+            <IconTile color="purple" size={8}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="7" cy="7" r="2" />
+                <circle cx="17" cy="17" r="2" />
+                <path d="M17 7 7 17" />
+              </svg>
+            </IconTile>
+            <MetricLabel>XIRR</MetricLabel>
+          </div>
+          <div className="mt-3">
+            {xirrLoading ? (
+              <StatSkeleton />
+            ) : (
+              <span className={`font-mono text-2xl font-medium ${pctColor(xirr?.xirr_percent)}`}>
+                {numStr(xirr?.xirr_percent, 2, "%")}
+              </span>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center gap-2.5">
+            <IconTile color="neutral" size={8}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 17H7A5 5 0 0 1 7 7h2" />
+                <path d="M15 7h2a5 5 0 1 1 0 10h-2" />
+                <path d="M8 12h8" />
+              </svg>
+            </IconTile>
+            <MetricLabel>Brokers Connected</MetricLabel>
+          </div>
+          <div className="mt-3 font-mono text-2xl font-medium text-ink">{activeBrokers.length}</div>
+        </Card>
+      </div>
+
+      {activeBrokers.length > 0 && (
+        <Card className="p-5">
+          <MetricLabel>Connected brokers</MetricLabel>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {activeBrokers.map((b) => (
+              <span
+                key={b.id}
+                className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1.5 text-sm font-medium text-ink"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-gain" aria-hidden="true" />
+                {BROKER_LABELS[b.broker_name] ?? b.broker_name}
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Compact links to the rest of the app — the full onboarding guide
+          cards (steps, "how to get started") stay reserved for WelcomeScreen,
+          a returning user with real data doesn't need them re-explained. */}
+      <div>
+        <h2 className="font-display text-lg text-ink">Explore</h2>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {QUICK_NAV.filter((c) => !c.wide).map((card) => (
+            <Link key={card.href} href={card.href}>
+              <Card interactive className="flex h-full flex-col items-start gap-2 p-4">
+                <IconTile color="neutral" size={8}>
+                  {card.icon}
+                </IconTile>
+                <span className="text-sm font-medium text-ink">{card.title}</span>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DashboardHome({
+  userId,
+  firstName,
+  hasData,
+  portfolio,
+  brokers,
+  totalEquityValue,
+}: {
+  userId: string;
+  firstName: string;
+  hasData: boolean;
+  portfolio: DashboardPortfolioItem[];
+  brokers: DashboardBrokerConnection[];
+  totalEquityValue: string | null;
+}) {
+  if (hasData) {
+    return (
+      <ConnectedOverview
+        firstName={firstName}
+        portfolio={portfolio}
+        brokers={brokers}
+        totalEquityValue={totalEquityValue}
+      />
+    );
+  }
+  return <WelcomeScreen userId={userId} firstName={firstName} />;
 }
