@@ -40,6 +40,19 @@
   --estimate-soft: #faeacc;
   --focus: #1e56a8;
 
+  /* Card-accent palette — icon-tile variety only (dashboard/portfolio stat
+     cards), never used for gain/loss/estimate semantics, which stay as
+     defined above. Light mode keeps --brand as professional blue; these
+     three give cards the purple/blue/orange range on top of that, still
+     WCAG AA at 11px badge-text size (verified against each color's own
+     -soft background, not just against --bg). */
+  --accent-purple: #7c3aed; /* 4.72:1 on its soft */
+  --accent-purple-soft: #efe6fd;
+  --accent-blue: #2563eb; /* 4.68:1 on its soft */
+  --accent-blue-soft: #eef4fe;
+  --accent-orange: #c2410c; /* 4.67:1 on its soft */
+  --accent-orange-soft: #fef1e7;
+
   /* Depth system (Stage 2A.2) — soft, layered, warm-neutral shadows.
      Kept subtle on data screens; login/marketing get the full treatment. */
   --shadow-sm: 0 1px 2px rgba(20, 24, 29, 0.06);
@@ -60,17 +73,31 @@
   --ink-faint: #939ea9;
   --rule: #2a323c;
   --rule-strong: #5c6b7c; /* 3.39:1 vs bg */
-  --brand: #7ab0f0; /* 8.19:1 on dark bg */
-  --brand-hover: #92c0f5;
-  --brand-fg: #0c1928; /* 7.84:1 on --brand */
-  --brand-soft: #17293e;
+  /* Dark mode's primary brand color is sunset orange, not blue — the one
+     place this palette departs between themes. All four values re-verified
+     for dark mode's own bg/surface, same as light mode's blue was. */
+  --brand: #ff7a45; /* 7.15:1 on dark bg */
+  --brand-hover: #e8631f; /* 5.49:1 on dark bg */
+  --brand-fg: #1a0f08; /* 7.28:1 on --brand — near-black, white text on this orange fails AA */
+  --brand-soft: #3a2115;
   --gain: #3dbb7e;
   --gain-soft: #16281f;
   --loss: #e06c5f;
   --loss-soft: #301c19;
   --estimate: #d9b45b; /* 9.36:1 on dark bg */
   --estimate-soft: #2a2415;
-  --focus: #7ab0f0;
+  --focus: #ff7a45;
+
+  /* Same card-accent trio as light mode, retuned for dark bg. accent-orange
+     intentionally matches --brand here (dark mode's whole identity is
+     orange) — it stays a distinct token so component code never has to
+     branch on theme to reach for "the orange accent". */
+  --accent-purple: #b794f6; /* 6.13:1 on its soft */
+  --accent-purple-soft: #2c2140;
+  --accent-blue: #60a5fa; /* 5.86:1 on its soft */
+  --accent-blue-soft: #16283f;
+  --accent-orange: #ff7a45; /* 5.77:1 on its soft */
+  --accent-orange-soft: #3a2115;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 4px 16px -4px rgba(0, 0, 0, 0.5), 0 2px 6px -2px rgba(0, 0, 0, 0.35);
@@ -99,6 +126,14 @@
   --color-loss-soft: var(--loss-soft);
   --color-estimate: var(--estimate);
   --color-estimate-soft: var(--estimate-soft);
+
+  /* Card-accent palette — see :root / .dark for values + contrast notes */
+  --color-accent-purple: var(--accent-purple);
+  --color-accent-purple-soft: var(--accent-purple-soft);
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-blue-soft: var(--accent-blue-soft);
+  --color-accent-orange: var(--accent-orange);
+  --color-accent-orange-soft: var(--accent-orange-soft);
 
   /* Broker brand colors — broker chips ONLY (BRD §4) */
   --color-broker-zerodha: #387ed1;
