@@ -1,3 +1,4 @@
+import logging
 from urllib.parse import quote
 from uuid import UUID
 
@@ -16,15 +17,36 @@ from app.repositories.broker_connection_repository import (
 from app.repositories.holding_lot_repository import HoldingLotRepository
 from app.repositories.instrument_repository import InstrumentRepository
 from app.repositories.realized_gain_repository import RealizedGainRepository
+from app.repositories.trade_analysis_repository import TradeAnalysisRepository
 from app.repositories.trade_repository import TradeRepository
 from app.repositories.vault_repository import VaultRepository
 from app.schemas.broker import BrokerSyncResponse
 from app.services.dashboard_service import DashboardService
 from app.services.holding_service import HoldingLotService
+from app.services.trade_analysis_pipeline import TradeAnalysisPipeline
+from app.services.trade_llm_service import TradeLLMService
 from app.services.trade_service import TradeService
 from app.services.zerodha_service import ZerodhaService
 
+logger = logging.getLogger("finvigil")
+
 router = APIRouter()
+
+
+def _trigger_auto_analysis(user_id: UUID, db: Session) -> None:
+    # Best-effort weekly AI Journaling analysis after a successful sync --
+    # never lets an LLM/DB hiccup here fail the broker sync response itself.
+    try:
+        pipeline = TradeAnalysisPipeline(
+            trade_repository=TradeRepository(db),
+            realized_gain_repository=RealizedGainRepository(db),
+            trade_analysis_repository=TradeAnalysisRepository(db),
+            trade_llm_service=TradeLLMService(),
+        )
+        pipeline.run_weekly_analysis(user_id)
+        logger.info("[FINVIGIL] Auto-analysis after sync")
+    except Exception as e:
+        logger.warning(f"[FINVIGIL] Auto-analysis failed: {e}")
 
 
 class ZerodhaLoginResponse(BaseModel):
@@ -105,6 +127,7 @@ def sync_zerodha_trades(
     service: ZerodhaService = Depends(get_zerodha_service),
     user_id: UUID = Depends(get_current_user_id),
     dashboard_service: DashboardService = Depends(get_dashboard_service),
+    db: Session = Depends(get_db),
 ):
     # sync_broker() never raises -- credential/token/network failures come
     # back as {success: False, error_code: ...} so the frontend can show a
@@ -118,4 +141,5 @@ def sync_zerodha_trades(
             dashboard_service.calculate_and_update_projection(user_id=user_id)
         except Exception:
             pass
+        _trigger_auto_analysis(user_id, db)
     return BrokerSyncResponse(**result)

@@ -6,7 +6,7 @@ actually calls, matching the real repositories' method signatures exactly
 something real about the service's logic, not about the fake's own shape.
 """
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -500,3 +500,68 @@ class FakeCorporateActionRepository:
 
     def get_by_user(self, user_id):
         return [a for a in self.existing if a.user_id == user_id]
+
+
+@dataclass
+class FakeTradeAnalysisResult:
+    """Stands in for app.models.trade_analysis.TradeAnalysisResult."""
+    user_id: UUID
+    week_start: date
+    week_end: date
+    trade_count: int
+    analysis_type: str
+    analysis_json: dict
+    raw_llm_output: str | None = None
+    llm_model: str | None = None
+    id: UUID = field(default_factory=uuid4)
+
+
+class FakeTradeAnalysisRepository:
+    def __init__(self, results: list[FakeTradeAnalysisResult] | None = None):
+        self.results = results or []
+        self.created: list[dict] = []
+
+    def create_analysis(
+        self, user_id, week_start, week_end, trade_count, analysis_type,
+        analysis_json, raw_llm_output, llm_model,
+    ):
+        result = FakeTradeAnalysisResult(
+            user_id=user_id,
+            week_start=week_start,
+            week_end=week_end,
+            trade_count=trade_count,
+            analysis_type=analysis_type,
+            analysis_json=analysis_json,
+            raw_llm_output=raw_llm_output,
+            llm_model=llm_model,
+        )
+        self.results.append(result)
+        self.created.append(
+            {"user_id": user_id, "analysis_type": analysis_type, "result": result}
+        )
+        return result
+
+    def get_latest_by_user(self, user_id):
+        weekly = [
+            r for r in self.results
+            if r.user_id == user_id and r.analysis_type == "weekly"
+        ]
+        return max(weekly, key=lambda r: r.week_start) if weekly else None
+
+    def get_by_user(self, user_id, limit=20):
+        matches = [r for r in self.results if r.user_id == user_id]
+        return sorted(matches, key=lambda r: r.week_start, reverse=True)[:limit]
+
+    def get_previous_week(self, user_id, before_date):
+        weekly = [
+            r for r in self.results
+            if r.user_id == user_id and r.analysis_type == "weekly"
+            and r.week_start < before_date
+        ]
+        return max(weekly, key=lambda r: r.week_start) if weekly else None
+
+    def get_by_id_and_user(self, analysis_id, user_id):
+        return next(
+            (r for r in self.results if r.id == analysis_id and r.user_id == user_id),
+            None,
+        )
